@@ -67,67 +67,70 @@ Filters may decide to drop frames, when its internal buffer-queue is empty.
 
 List of implemented consumer modules in core:
 
-- Nullreader
+- Nullreader:
   a producer, sending all zero-filled frames
 
-- DiskReader
+- DiskReader:
   a producer, reading data from disk
 
-- ZeroReader
+- ZeroReader:
   a producer, reading data from /dev/zero, used for benchmarking
 
-- RandomReader
+- RandomReader:
   a producer, reading data from /dev/random
 
 List of implemented consumer modules in core:
 
-- NoWriter
+- NoWriter:
   a consumer, dropping all input
 
-- DiskWriter
+- DiskWriter:
   a consumer, writing data to disk
 
-- NullWriter
+- NullWriter:
   a consumer, writing to /dev/null, used for benchmarking 
+
+- FrameWriter:
+  write most recent frame to disk 
 
 List of implemented filter modules in core:
 
-- StreamMangler
+- StreamMangler:
   a filter, distributing an input stream evenly to several consumers
 
-- LazyForward
+- LazyForward:
   a filter, always accepting input, and passing frames to a consumer, dropping frames on buffer underrun 
 
-- StreamSwitcher
+- StreamFork:
   a filter, passing frames to several consumer; this is a costly filter, as it involves copying frames into new buffers
 
 Hardware-related Modules:
 
-- AdcDevice
+- AdcDevice:
   abstraction of an attached ADC hardware 
 
-- AdcReader
+- AdcReader:
   a producer, reading samples from attached hardware
  
-(Data-processing Filters:
+Data-processing Filters:
 
-- Histogramm
+- Histogramm:
   a filter, building a histogram over time
 
-- DeCorrelate
+- DeCorrelate:
   a filter, trying to decorrelate input data based on statistical propabillity
 
-- VonNeumannDebias
+- VonNeumannDebias:
   a filter, implementing the von Neuman de-bias algorithm https://en.wikipedia.org/wiki/Randomness_extractor#Von_Neumann_extractor
 
-- PeresDebias
+- PeresDebias:
   a filter, implementing the Peres de-bias algorith, sample implementation at https://peteroupc.github.io/randextract.html
 
-- MorinaDebias (would that be helpfull??)
+- MorinaDebias: (would that be helpfull??)
   a filter, implementing the algorithm as described in https://arxiv.org/abs/1912.09229
 
-- QuantisRandomExtractor
-  a filter, implementing a random extraction algorithm as used in Quantis devices, described in 
+- QuantisRandomExtractor:
+  a filter, implementing a random extraction algorithm as used in Quantis devices, described in [...]
 
 
 ## Language Bindings
@@ -140,7 +143,7 @@ Cython [https://cython.org/] is used to implement the bindings, allowing for see
 
 Main development target is linux, using a debian-ish distribution. Ports to other OS, mainly MS-Windows, are feasable, but not planned for the near future.
 
-A Hardware abstraction layer trys to de-couple hardware specifics from the core implementation.
+A Hardware abstraction layer tries to de-couple hardware specifics from the core implementation.
 
 ## Examples
 
@@ -174,6 +177,23 @@ reader >> writer;
 reader.start(); writer.start();
 reader.wait_for();
 writer.stop();
+
+// no cleanup needed, C-Scope will take care
+```
+
+### a simple filter
+
+``` C++
+// build graph
+DiskReader reader("text.txt");
+UpperCaseFilter f("uppercase")
+DiskWriter writer("uppercase-of-text.txt");
+reader >> f >> writer;
+
+// perform action
+Node::start_all();
+reader.wait_for();
+Node::stop_all();
 
 // no cleanup needed, C-Scope will take care
 ```
@@ -277,11 +297,13 @@ VonNeumanDebias debias("Debias");
 Histogram histogram("Histogram");
 StreamFork fork("1-to-2 switch", 2);
 DiskWriter writer("Write to disk", "output.bin");
+FrameWriter hwriter("Write Hidtogram", "histogram.bin");
 
-adc > debias;
+adc >> debias;
 debias >> fork;
 fork[0] >> histogram
 fork[1] >> writer;
+histogram >> hwriter;
 
 // run for 10 sec
 Timer tm(10 * SEC);
@@ -316,6 +338,7 @@ RandomExtractor re4("Randon Extractor #1");
 StreamFork fork("1-to-2 switch", 2)
 Histogram histogram("Histogram");
 DiskWriter writer("Write to disk", "output.bin");
+FrameWriter hwriter("Write Hidtogram", "histogram.bin");
 
 adc >> dist;
 dist[0]>>re1;
@@ -328,6 +351,7 @@ dist[3]>>re4;
 re4 >> fork;
 fork[0] >> histogram
 fork[1] >> writer;
+histogram >> hwriter;
 
 // run for 10 sec
 Timer tm(10 * SEC);

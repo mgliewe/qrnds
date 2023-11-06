@@ -33,8 +33,6 @@ const int M = K * K;
 const int G = M * K;
 
 
-const int S_RUNNING = 1;
-const int S_PAUSED = 2;
 
 const int S_PRODUCER = 0x100;
 const int S_CONSUMER = 0x200;
@@ -60,9 +58,13 @@ class Consumer;
 class Lockable {
     pthread_mutex_t mutex;
 public:
+    /** create a lockable object */
     Lockable();
+    /** release a lockable object*/
     ~Lockable();
+    /** aquire lock */
     void lock();
+    /** release lock */
     void unlock();
 };
 
@@ -73,16 +75,21 @@ public:
 class Semaphore {
     sem_t sem;
 public:
+    /** create a signaling object  */
     Semaphore();
+    /** release a signaling object */
     ~Semaphore();
+    /** wait for signal */
     void wait();
+    /** wait for signal, abrt after timeout naosecs */
     void wait(long timeout);
+    /** emit a signal */
     void post();
 };
 
 
 /**
- * A class Thread 
+ * An Task, implemented in an execution thread 
  */
 class Runnable {
 private:
@@ -90,30 +97,55 @@ private:
     Semaphore sem;
 
 protected:
-    int run_state;
+    enum {
+        S_RUNNING = 1,
+        S_PAUSED = 2
+    } run_state;
+
+    enum task_priorities {
+        P_HIGH_PRIORITY,
+        P_NORMAL_PRIORITY,
+        P_LOW_PRIORITY
+    };
 
 public:
+    /** create a runnable object */
     Runnable();
+    /** release a runnable object */
     ~Runnable();
 
+    /** set task priority; must be set prior to start()
+     * @param priority  
+    */
     void set_priority(int priority);
 
+    /** start the task */
     void start();
+    /** stop the task at next convinient time */
     void stop();
-
-    void pause();
-    void resume();
-
+    /** wait for task to finish */
     void wait_for();
 
+    /** pause the task at next convinient time */
+    void pause();
+    /** resume the task when paused */
+    void resume();
+    /** wait for task to resume */
+    void wait_for_resume();
 
+    /** check if task is stopped */
     inline bool is_stopped() { return !(run_state & S_RUNNING); }
+    /** check if task is paused */
     inline bool is_paused() { return run_state & S_PAUSED; }
+    /** check if task is running */
     inline bool is_running() { return !( is_paused() || is_stopped() ); }
 
 protected:
-    void wait_for_resume();
-
+    /**
+     * perform the tasks work.
+     * 
+     * subclasses must implement this method. 
+     */
     virtual void run() = 0;
 
 private:
@@ -129,9 +161,14 @@ private:
     Semaphore sem;
     int period;
 public:
+    /** 
+     * create a Timer 
+     * @param period    interval the timer is signaling
+    */
     Timer(int period);
 
 protected:
+    /** the timers implementation */
     void run();
 };
 
@@ -144,8 +181,9 @@ protected:
 class Interval : public Runnable {
 private:
     Timer tm;
+    void *ctx;
 public:
-    Interval(int period);
+    Interval(int period, void ctx);
     virtual void action() = 0;
 
 protected:
@@ -165,13 +203,17 @@ protected:
  * Buffers are passed between Producer/Consumer via BufferStreams. 
  */
 struct Frame {
-    int size;
-    int capacity;
-    value_type *data;
+
+protected:
     Producer *owner;        
     Frame *link;                   // used for Fifos and Lists
     Frame *alloc_link;             // used to keep a list of all allocated buffers
-    void (*destruct)(void *);     // free() function for data
+    void (*destruct)(void *);      // free() function for data
+
+public:
+    int count;
+    int capacity;
+    value_type *data;
 
     Frame(Producer &owner, int capacity, value_type *Frame = 0, void(*destruct)(void *) = 0);
     ~Frame();
@@ -191,10 +233,10 @@ class FrameStream : protected Lockable, protected Semaphore {
 public:
     FrameStream();
 
-    void append(Frame *);
-    Frame *shift(long timeout);
-    Frame *shift() {
-        return shift(0);
+    void enqueue(Frame *);
+    Frame *dequeue(long timeout);
+    Frame *dequeue() {
+        return dequeue(0);
     }
     Frame *top();
 };
