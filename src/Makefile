@@ -21,7 +21,7 @@ qrnd.so: qrnd-core.o fauchinger.o von_neumann.o
 		$(LXXOPT)
 
 
-ats-tools: ls-ats ats-capture
+ats-tools: ls-ats ats-capture ATS-spy.so
 
 ls-ats: ls-ats.o ATS-SDK.o
 	c++ $(CXXOPT) -o ls-ats ls-ats.o ATS-SDK.o $(LXXOPT)
@@ -32,9 +32,12 @@ ats-capture: ats-capture.o ATS-SDK.o
 ls-ats.o: ls-ats.cpp ATS-SDK.h
 	c++ $(CXXOPT) -c ls-ats.cpp
 
+ATS-spy.so:
+	gcc -o ATS-spy.so ATS-spy.c -shared -fPIC
+
 ATS-SDK.o: ATS-SDK.cpp ATS-SDK.h
 	c++ $(CXXOPT) -c ATS-SDK.cpp
 
 
 clean: 
-	rm -f *.o ls-ats ats-capture qrnd-core.o
+	rm -f *.o ls-ats ats-capture ATS-spy.so

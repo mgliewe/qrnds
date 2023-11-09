@@ -10,7 +10,7 @@ const char * driver_version() {
     uint8_t major, minor, revision;
     AlazarGetDriverVersion(&major, &minor, &revision);
 
-    sprintf(version_string, "%3d.%3d.%3d", major, minor, revision);
+    sprintf(version_string, "%d.%d.%d", major, minor, revision);
     return version_string;
 }
 
@@ -19,7 +19,7 @@ const char * sdk_version() {
     uint8_t major, minor, revision;
     AlazarGetSDKVersion(&major, &minor, &revision);
 
-    sprintf(version_string, "%3d.%3d.%3d", major, minor, revision);
+    sprintf(version_string, "%d.%d.%d", major, minor, revision);
     return version_string;
 }
 
@@ -48,13 +48,6 @@ Board::Board(int system_id, int board_id) {
     onboard_memory = mem;
     bits_per_sample = bits;
 
-    num_channels = 0;
-    for(int n=0; n<256; ++n) {
-        long v;
-        if (AlazarGetParameter(handle, n, DATA_WIDTH, &v) == ApiSuccess) {
-            num_channels ++;
-        }
-    }
     
 }
 
@@ -63,7 +56,7 @@ const char * Board::cpld_version() {
     uint8_t major, minor, revision = 0;
     AlazarGetCPLDVersion(handle, &major, &minor);
 
-    sprintf(version_string, "%3d.%3d.%3d", major, minor, revision);
+    sprintf(version_string, "%d.%d.%d", major, minor, revision);
     return version_string;
 }
 
@@ -96,7 +89,7 @@ const char * Board::board_revision() {
     uint8_t major, minor, revision = 0;
     AlazarGetBoardRevision(handle, &major, &minor);
 
-    sprintf(version_string, "%3d.%3d.%3d", major, minor, revision);
+    sprintf(version_string, "%d.%d.%d", major, minor, revision);
     return version_string;
 }
 

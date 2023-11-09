@@ -32,8 +32,8 @@ const char *yesno(int v) {
 
 int main() {
 
-    cout << "ATS-SDK version:" << ARS::sdk_version() <<endl; 
-    cout << "Kernel driver version:" << ARS::sdk_version() <<endl; 
+    cout << "ATS-SDK version:" << ATS::sdk_version() <<endl; 
+    cout << "Kernel driver version:" << ATS::sdk_version() <<endl; 
 
     if (ATS::num_boards()<1) {
         cout << "no digitizer cads found." << endl;
