@@ -7,7 +7,7 @@
 using std::cout, std::endl;
 
 
-void show_size(std::ostream &out, int sz) {
+void show_size(std::ostream &out, unsigned long sz) {
     if (sz<1024) {
         out << sz << "B";
     } else {
@@ -32,8 +32,15 @@ const char *yesno(int v) {
 
 int main() {
 
-    for( int sysid=0; sysid<ATS::num_systems(); ++sysid) {
-        for (int boardid = 0; boardid<ATS::num_boards(sysid); ++boardid) {
+    cout << "ATS-SDK version:" << ARS::sdk_version() <<endl; 
+    cout << "Kernel driver version:" << ARS::sdk_version() <<endl; 
+
+    if (ATS::num_boards()<1) {
+        cout << "no digitizer cads found." << endl;
+    }
+
+    for( int sysid=1; sysid<=ATS::num_systems(); ++sysid) {
+        for (int boardid = 1; boardid<=ATS::num_boards(sysid); ++boardid) {
 
             ATS::Board board(sysid, boardid);
 
@@ -49,15 +56,12 @@ int main() {
             cout << "\tCPLD version: " 
                 << board.cpld_version() << endl;
 
-            cout << "\tNumber of channels: "; 
-                show_size(cout, board.num_channels); 
-                cout << endl;
+            cout << "\tNumber of channels: " << board.num_channels << endl; 
+
             cout << "\tOn-Board memory: "; 
                 show_size(cout, board.onboard_memory); 
                 cout << endl;
-            cout << "\tBits per sample: "; 
-                show_size(cout, board.bits_per_sample); 
-                cout << endl;
+            cout << "\tBits per sample: " << board.bits_per_sample << endl;
 
             cout << "\t8-bit packing support: "
                  << yesno(board.query_capability(CAP_SUPPORT_8_BIT_PACKING)) << endl;
@@ -69,11 +73,8 @@ int main() {
 //            cout << "streaming DMA support: "
 //                 << yesno(board.query_capability(OPTION_STREAMING_DMA)) << endl;
 
-            cout << "PCI link speed: ";
-                 show_size(cout, board.query_capability(GET_PCIE_LINK_SPEED)); 
-                 cout << endl;
-            cout << "PCI link width: "
-                 << (board.query_capability(GET_PCIE_LINK_WIDTH)) << endl;
+            cout << "PCI link speed: " << board.query_capability(GET_PCIE_LINK_SPEED) << endl; 
+            cout << "PCI link width: " << board.query_capability(GET_PCIE_LINK_WIDTH) << endl;
         }
     }
 
