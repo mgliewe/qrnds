@@ -1,49 +1,8 @@
 
 
 
-class bitstream {
-    Frame *frame;
-    int capacity;
-    int byte_count;
 
-    uint8_t byte;
-    int bit_count;
-    uint8_t bit_mask;
 
-public:
-    inline bitstream(Frame *out) {
-        init(out);
-        bit_mask = 0x80;
-    }
-
-    inline void init(Frame *f) {
-        frame = f;
-        capacity = f->capacity;
-        byte_count = 0;
-    }
-
-    inline bool emit(int bit) {
-        if (bit)
-            byte |= bitmask;
-        bit_mask >>= 1;
-
-        bit_count++;
-        if (bit_count==8) {
-            *pout++ = byte;
-            bit_mask = 0x80;
-            byte_count++;
-            if (byte_count==capacity) {
-                frame->count = byte_count;
-                return true;
-                /*
-                send(frame);
-                Frame *f = get_frame();
-                bitstream<>::init(f);
-                */
-            }
-        }
-    }
-}
 
 void NeumannDeBias::run() {
 
