@@ -1,3 +1,5 @@
+	#define _GNU_SOURCE
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,8 +33,6 @@ struct api_functions {
 	RETURN_CODE (*AlazarReadWriteTest) (HANDLE handle, U32 *Buffer, U32 SizeToWrite, U32 SizeToRead);
 	int show_AlazarMemoryTest;
 	RETURN_CODE (*AlazarMemoryTest) (HANDLE handle, U32 *errors);
-	int show_AlazarBusyFlag;
-	RETURN_CODE (*AlazarBusyFlag) (HANDLE handle, int *BusyFlag);
 	int show_AlazarTriggeredFlag;
 	RETURN_CODE (*AlazarTriggeredFlag) (HANDLE handle, int *TriggeredFlag);
 	int show_AlazarGetSDKVersion;
@@ -71,8 +71,6 @@ struct api_functions {
 	RETURN_CODE (*AlazarSetTriggerTimeOut) (HANDLE handle, U32 timeout_ticks);
 	int show_AlazarTriggerTimedOut;
 	U32 (*AlazarTriggerTimedOut) (HANDLE h);
-	int show_AlazarGetTriggerAddress;
-	RETURN_CODE (*AlazarGetTriggerAddress) (HANDLE handle, U32 Record, U32 *TriggerAddress, U32 *TimeStampHighPart, U32 *TimeStampLowPart);
 	int show_AlazarSetTriggerOperation;
 	RETURN_CODE (*AlazarSetTriggerOperation) (HANDLE handle, U32 TriggerOperation, U32 TriggerEngine1, U32 Source1, U32 Slope1, U32 Level1, U32 TriggerEngine2, U32 Source2, U32 Slope2, U32 Level2);
 	int show_AlazarGetTriggerTimestamp;
@@ -169,22 +167,12 @@ struct api_functions {
 	RETURN_CODE (*AlazarWaitAsyncBufferComplete) (HANDLE handle, void *buffer, U32 timeout_ms);
 	int show_AlazarWaitNextAsyncBufferComplete;
 	RETURN_CODE (*AlazarWaitNextAsyncBufferComplete) (HANDLE handle, void *buffer, U32 bytesToCopy, U32 timeout_ms);
-	int show_AlazarCreateStreamFile;
-	RETURN_CODE (*AlazarCreateStreamFile) (HANDLE handle, const char *filePath);
 	int show_AlazarResetTimeStamp;
 	RETURN_CODE (*AlazarResetTimeStamp) (HANDLE handle, U32 option);
 	int show_AlazarReadRegister;
 	RETURN_CODE (*AlazarReadRegister) (HANDLE handle, U32 offset, U32 *retVal, U32 pswrd);
 	int show_AlazarWriteRegister;
 	RETURN_CODE (*AlazarWriteRegister) (HANDLE handle, U32 offset, U32 Val,U32 pswrd);
-	int show_ReadC;
-	RETURN_CODE (*ReadC) (HANDLE handle, U8 *DmaBuffer, U32 SizeToRead, U32 LocalAddress);
-	int show_WriteC;
-	void (*WriteC) (HANDLE handle, U8 *DmaBuffer, U32 SizeToRead, U32 LocalAddress);
-	int show_AlazarGetTriggerAddressA;
-	RETURN_CODE (*AlazarGetTriggerAddressA) (HANDLE handle, U32 Record, U32 *TriggerAddress, U32 *TimeStampHighPart, U32 *TimeStampLowPart);
-	int show_AlazarGetTriggerAddressB;
-	RETURN_CODE (*AlazarGetTriggerAddressB) (HANDLE handle, U32 Record, U32 *TriggerAddress, U32 *TimeStampHighPart, U32 *TimeStampLowPart);
 	int show_ATS9462FlashSectorPageRead;
 	RETURN_CODE (*ATS9462FlashSectorPageRead) (HANDLE handle, U32 address, U16 *PageBuff);
 	int show_ATS9462PageWriteToFlash;
@@ -201,8 +189,6 @@ struct api_functions {
 	RETURN_CODE (*AlazarWrite) (HANDLE handle, void *buffer, long bufLen, int DmaChannel, U32 firstPoint, U32 startAddress, U32 endAddress, BOOL waitTillEnd, U32 *error);
 	int show_AlazarConfigureAuxIO;
 	RETURN_CODE (*AlazarConfigureAuxIO) (HANDLE handle, U32 mode, U32 parameter);
-	int show_AlazarErrorToText;
-	const char * (*AlazarErrorToText) (RETURN_CODE retCode);
 	int show_AlazarConfigureSampleSkipping;
 	RETURN_CODE (*AlazarConfigureSampleSkipping) (HANDLE handle, U32 mode, U32 sampleClocksPerRecord, U16 *sampleSkipBitmap);
 	int show_AlazarCoprocessorRegisterRead;
@@ -295,7 +281,6 @@ struct api_functions {
 
 
 static struct api_functions api_functions;
-static void *dll;
 
 static int last_func;
 static int repeat_count;
@@ -307,700 +292,655 @@ static void out(const char *str) {
 
 static void load_api_functions() {
 	void *p;
-	dll = dlopen(API_SO, RTLD_NOW);
-	if (!dll) {
-		out("FATAL: cannot dlopen "); out(API_SO); out("\n");
-		abort();
-	}
 
 	api_functions.show_AlazarGetOEMFPGAName = 0;
-	p = dlsym(dll, "AlazarGetOEMFPGAName");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetOEMFPGAName"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetOEMFPGAName");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetOEMFPGAName\n"); }
 	api_functions.AlazarGetOEMFPGAName = p;
 
 	api_functions.show_AlazarOEMSetWorkingDirectory = 1;
-	p = dlsym(dll, "AlazarOEMSetWorkingDirectory");
-	if(!p) { out("FATAL: cannot dlsym of AlazarOEMSetWorkingDirectory"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarOEMSetWorkingDirectory");
+	if(!p) { out("FATAL: cannot dlsym of AlazarOEMSetWorkingDirectory\n"); }
 	api_functions.AlazarOEMSetWorkingDirectory = p;
 
 	api_functions.show_AlazarOEMGetWorkingDirectory = 1;
-	p = dlsym(dll, "AlazarOEMGetWorkingDirectory");
-	if(!p) { out("FATAL: cannot dlsym of AlazarOEMGetWorkingDirectory"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarOEMGetWorkingDirectory");
+	if(!p) { out("FATAL: cannot dlsym of AlazarOEMGetWorkingDirectory\n"); }
 	api_functions.AlazarOEMGetWorkingDirectory = p;
 
 	api_functions.show_AlazarParseFPGAName = 1;
-	p = dlsym(dll, "AlazarParseFPGAName");
-	if(!p) { out("FATAL: cannot dlsym of AlazarParseFPGAName"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarParseFPGAName");
+	if(!p) { out("FATAL: cannot dlsym of AlazarParseFPGAName\n"); }
 	api_functions.AlazarParseFPGAName = p;
 
 	api_functions.show_AlazarDownLoadFPGA = 1;
-	p = dlsym(dll, "AlazarDownLoadFPGA");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDownLoadFPGA"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDownLoadFPGA");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDownLoadFPGA\n"); }
 	api_functions.AlazarDownLoadFPGA = p;
 
 	api_functions.show_AlazarOEMDownLoadFPGA = 1;
-	p = dlsym(dll, "AlazarOEMDownLoadFPGA");
-	if(!p) { out("FATAL: cannot dlsym of AlazarOEMDownLoadFPGA"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarOEMDownLoadFPGA");
+	if(!p) { out("FATAL: cannot dlsym of AlazarOEMDownLoadFPGA\n"); }
 	api_functions.AlazarOEMDownLoadFPGA = p;
 
 	api_functions.show_AlazarReadWriteTest = 1;
-	p = dlsym(dll, "AlazarReadWriteTest");
-	if(!p) { out("FATAL: cannot dlsym of AlazarReadWriteTest"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarReadWriteTest");
+	if(!p) { out("FATAL: cannot dlsym of AlazarReadWriteTest\n"); }
 	api_functions.AlazarReadWriteTest = p;
 
 	api_functions.show_AlazarMemoryTest = 1;
-	p = dlsym(dll, "AlazarMemoryTest");
-	if(!p) { out("FATAL: cannot dlsym of AlazarMemoryTest"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarMemoryTest");
+	if(!p) { out("FATAL: cannot dlsym of AlazarMemoryTest\n"); }
 	api_functions.AlazarMemoryTest = p;
 
-	api_functions.show_AlazarBusyFlag = 1;
-	p = dlsym(dll, "AlazarBusyFlag");
-	if(!p) { out("FATAL: cannot dlsym of AlazarBusyFlag"); abort(); }
-	api_functions.AlazarBusyFlag = p;
-
 	api_functions.show_AlazarTriggeredFlag = 1;
-	p = dlsym(dll, "AlazarTriggeredFlag");
-	if(!p) { out("FATAL: cannot dlsym of AlazarTriggeredFlag"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarTriggeredFlag");
+	if(!p) { out("FATAL: cannot dlsym of AlazarTriggeredFlag\n"); }
 	api_functions.AlazarTriggeredFlag = p;
 
 	api_functions.show_AlazarGetSDKVersion = 1;
-	p = dlsym(dll, "AlazarGetSDKVersion");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetSDKVersion"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetSDKVersion");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetSDKVersion\n"); }
 	api_functions.AlazarGetSDKVersion = p;
 
 	api_functions.show_AlazarGetDriverVersion = 1;
-	p = dlsym(dll, "AlazarGetDriverVersion");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetDriverVersion"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetDriverVersion");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetDriverVersion\n"); }
 	api_functions.AlazarGetDriverVersion = p;
 
 	api_functions.show_AlazarGetBoardRevision = 1;
-	p = dlsym(dll, "AlazarGetBoardRevision");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetBoardRevision"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetBoardRevision");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetBoardRevision\n"); }
 	api_functions.AlazarGetBoardRevision = p;
 
 	api_functions.show_AlazarBoardsFound = 1;
-	p = dlsym(dll, "AlazarBoardsFound");
-	if(!p) { out("FATAL: cannot dlsym of AlazarBoardsFound"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarBoardsFound");
+	if(!p) { out("FATAL: cannot dlsym of AlazarBoardsFound\n"); }
 	api_functions.AlazarBoardsFound = p;
 
 	api_functions.show_AlazarOpen = 1;
-	p = dlsym(dll, "AlazarOpen");
-	if(!p) { out("FATAL: cannot dlsym of AlazarOpen"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarOpen");
+	if(!p) { out("FATAL: cannot dlsym of AlazarOpen\n"); }
 	api_functions.AlazarOpen = p;
 
 	api_functions.show_AlazarClose = 1;
-	p = dlsym(dll, "AlazarClose");
-	if(!p) { out("FATAL: cannot dlsym of AlazarClose"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarClose");
+	if(!p) { out("FATAL: cannot dlsym of AlazarClose\n"); }
 	api_functions.AlazarClose = p;
 
 	api_functions.show_AlazarGetBoardKind = 1;
-	p = dlsym(dll, "AlazarGetBoardKind");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetBoardKind"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetBoardKind");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetBoardKind\n"); }
 	api_functions.AlazarGetBoardKind = p;
 
 	api_functions.show_AlazarGetCPLDVersion = 1;
-	p = dlsym(dll, "AlazarGetCPLDVersion");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetCPLDVersion"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetCPLDVersion");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetCPLDVersion\n"); }
 	api_functions.AlazarGetCPLDVersion = p;
 
 	api_functions.show_AlazarAutoCalibrate = 1;
-	p = dlsym(dll, "AlazarAutoCalibrate");
-	if(!p) { out("FATAL: cannot dlsym of AlazarAutoCalibrate"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarAutoCalibrate");
+	if(!p) { out("FATAL: cannot dlsym of AlazarAutoCalibrate\n"); }
 	api_functions.AlazarAutoCalibrate = p;
 
 	api_functions.show_AlazarGetChannelInfo = 1;
-	p = dlsym(dll, "AlazarGetChannelInfo");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetChannelInfo"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetChannelInfo");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetChannelInfo\n"); }
 	api_functions.AlazarGetChannelInfo = p;
 
 	api_functions.show_AlazarGetChannelInfoEx = 1;
-	p = dlsym(dll, "AlazarGetChannelInfoEx");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetChannelInfoEx"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetChannelInfoEx");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetChannelInfoEx\n"); }
 	api_functions.AlazarGetChannelInfoEx = p;
 
 	api_functions.show_AlazarInputControl = 1;
-	p = dlsym(dll, "AlazarInputControl");
-	if(!p) { out("FATAL: cannot dlsym of AlazarInputControl"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarInputControl");
+	if(!p) { out("FATAL: cannot dlsym of AlazarInputControl\n"); }
 	api_functions.AlazarInputControl = p;
 
 	api_functions.show_AlazarInputControlEx = 1;
-	p = dlsym(dll, "AlazarInputControlEx");
-	if(!p) { out("FATAL: cannot dlsym of AlazarInputControlEx"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarInputControlEx");
+	if(!p) { out("FATAL: cannot dlsym of AlazarInputControlEx\n"); }
 	api_functions.AlazarInputControlEx = p;
 
 	api_functions.show_AlazarSetPosition = 1;
-	p = dlsym(dll, "AlazarSetPosition");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetPosition"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetPosition");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetPosition\n"); }
 	api_functions.AlazarSetPosition = p;
 
 	api_functions.show_AlazarSetExternalTrigger = 1;
-	p = dlsym(dll, "AlazarSetExternalTrigger");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetExternalTrigger"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetExternalTrigger");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetExternalTrigger\n"); }
 	api_functions.AlazarSetExternalTrigger = p;
 
 	api_functions.show_AlazarSetTriggerDelay = 1;
-	p = dlsym(dll, "AlazarSetTriggerDelay");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetTriggerDelay"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetTriggerDelay");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetTriggerDelay\n"); }
 	api_functions.AlazarSetTriggerDelay = p;
 
 	api_functions.show_AlazarSetTriggerTimeOut = 1;
-	p = dlsym(dll, "AlazarSetTriggerTimeOut");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetTriggerTimeOut"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetTriggerTimeOut");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetTriggerTimeOut\n"); }
 	api_functions.AlazarSetTriggerTimeOut = p;
 
 	api_functions.show_AlazarTriggerTimedOut = 1;
-	p = dlsym(dll, "AlazarTriggerTimedOut");
-	if(!p) { out("FATAL: cannot dlsym of AlazarTriggerTimedOut"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarTriggerTimedOut");
+	if(!p) { out("FATAL: cannot dlsym of AlazarTriggerTimedOut\n"); }
 	api_functions.AlazarTriggerTimedOut = p;
 
-	api_functions.show_AlazarGetTriggerAddress = 1;
-	p = dlsym(dll, "AlazarGetTriggerAddress");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetTriggerAddress"); abort(); }
-	api_functions.AlazarGetTriggerAddress = p;
-
 	api_functions.show_AlazarSetTriggerOperation = 1;
-	p = dlsym(dll, "AlazarSetTriggerOperation");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetTriggerOperation"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetTriggerOperation");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetTriggerOperation\n"); }
 	api_functions.AlazarSetTriggerOperation = p;
 
 	api_functions.show_AlazarGetTriggerTimestamp = 1;
-	p = dlsym(dll, "AlazarGetTriggerTimestamp");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetTriggerTimestamp"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetTriggerTimestamp");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetTriggerTimestamp\n"); }
 	api_functions.AlazarGetTriggerTimestamp = p;
 
 	api_functions.show_AlazarSetTriggerOperationForScanning = 1;
-	p = dlsym(dll, "AlazarSetTriggerOperationForScanning");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetTriggerOperationForScanning"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetTriggerOperationForScanning");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetTriggerOperationForScanning\n"); }
 	api_functions.AlazarSetTriggerOperationForScanning = p;
 
 	api_functions.show_AlazarAbortCapture = 1;
-	p = dlsym(dll, "AlazarAbortCapture");
-	if(!p) { out("FATAL: cannot dlsym of AlazarAbortCapture"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarAbortCapture");
+	if(!p) { out("FATAL: cannot dlsym of AlazarAbortCapture\n"); }
 	api_functions.AlazarAbortCapture = p;
 
 	api_functions.show_AlazarForceTrigger = 1;
-	p = dlsym(dll, "AlazarForceTrigger");
-	if(!p) { out("FATAL: cannot dlsym of AlazarForceTrigger"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarForceTrigger");
+	if(!p) { out("FATAL: cannot dlsym of AlazarForceTrigger\n"); }
 	api_functions.AlazarForceTrigger = p;
 
 	api_functions.show_AlazarForceTriggerEnable = 1;
-	p = dlsym(dll, "AlazarForceTriggerEnable");
-	if(!p) { out("FATAL: cannot dlsym of AlazarForceTriggerEnable"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarForceTriggerEnable");
+	if(!p) { out("FATAL: cannot dlsym of AlazarForceTriggerEnable\n"); }
 	api_functions.AlazarForceTriggerEnable = p;
 
 	api_functions.show_AlazarStartCapture = 1;
-	p = dlsym(dll, "AlazarStartCapture");
-	if(!p) { out("FATAL: cannot dlsym of AlazarStartCapture"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarStartCapture");
+	if(!p) { out("FATAL: cannot dlsym of AlazarStartCapture\n"); }
 	api_functions.AlazarStartCapture = p;
 
 	api_functions.show_AlazarCaptureMode = 1;
-	p = dlsym(dll, "AlazarCaptureMode");
-	if(!p) { out("FATAL: cannot dlsym of AlazarCaptureMode"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarCaptureMode");
+	if(!p) { out("FATAL: cannot dlsym of AlazarCaptureMode\n"); }
 	api_functions.AlazarCaptureMode = p;
 
 	api_functions.show_AlazarStreamCapture = 1;
-	p = dlsym(dll, "AlazarStreamCapture");
-	if(!p) { out("FATAL: cannot dlsym of AlazarStreamCapture"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarStreamCapture");
+	if(!p) { out("FATAL: cannot dlsym of AlazarStreamCapture\n"); }
 	api_functions.AlazarStreamCapture = p;
 
 	api_functions.show_AlazarHyperDisp = 1;
-	p = dlsym(dll, "AlazarHyperDisp");
-	if(!p) { out("FATAL: cannot dlsym of AlazarHyperDisp"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarHyperDisp");
+	if(!p) { out("FATAL: cannot dlsym of AlazarHyperDisp\n"); }
 	api_functions.AlazarHyperDisp = p;
 
 	api_functions.show_AlazarFastPRRCapture = 1;
-	p = dlsym(dll, "AlazarFastPRRCapture");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFastPRRCapture"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFastPRRCapture");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFastPRRCapture\n"); }
 	api_functions.AlazarFastPRRCapture = p;
 
 	api_functions.show_AlazarBusy = 1;
-	p = dlsym(dll, "AlazarBusy");
-	if(!p) { out("FATAL: cannot dlsym of AlazarBusy"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarBusy");
+	if(!p) { out("FATAL: cannot dlsym of AlazarBusy\n"); }
 	api_functions.AlazarBusy = p;
 
 	api_functions.show_AlazarTriggered = 1;
-	p = dlsym(dll, "AlazarTriggered");
-	if(!p) { out("FATAL: cannot dlsym of AlazarTriggered"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarTriggered");
+	if(!p) { out("FATAL: cannot dlsym of AlazarTriggered\n"); }
 	api_functions.AlazarTriggered = p;
 
 	api_functions.show_AlazarGetStatus = 1;
-	p = dlsym(dll, "AlazarGetStatus");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetStatus"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetStatus");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetStatus\n"); }
 	api_functions.AlazarGetStatus = p;
 
 	api_functions.show_AlazarDetectMultipleRecord = 1;
-	p = dlsym(dll, "AlazarDetectMultipleRecord");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDetectMultipleRecord"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDetectMultipleRecord");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDetectMultipleRecord\n"); }
 	api_functions.AlazarDetectMultipleRecord = p;
 
 	api_functions.show_AlazarSetRecordCount = 1;
-	p = dlsym(dll, "AlazarSetRecordCount");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetRecordCount"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetRecordCount");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetRecordCount\n"); }
 	api_functions.AlazarSetRecordCount = p;
 
 	api_functions.show_AlazarSetRecordSize = 1;
-	p = dlsym(dll, "AlazarSetRecordSize");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetRecordSize"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetRecordSize");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetRecordSize\n"); }
 	api_functions.AlazarSetRecordSize = p;
 
 	api_functions.show_AlazarSetCaptureClock = 1;
-	p = dlsym(dll, "AlazarSetCaptureClock");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetCaptureClock"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetCaptureClock");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetCaptureClock\n"); }
 	api_functions.AlazarSetCaptureClock = p;
 
 	api_functions.show_AlazarSetExternalClockLevel = 1;
-	p = dlsym(dll, "AlazarSetExternalClockLevel");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetExternalClockLevel"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetExternalClockLevel");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetExternalClockLevel\n"); }
 	api_functions.AlazarSetExternalClockLevel = p;
 
 	api_functions.show_AlazarSetClockSwitchOver = 1;
-	p = dlsym(dll, "AlazarSetClockSwitchOver");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetClockSwitchOver"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetClockSwitchOver");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetClockSwitchOver\n"); }
 	api_functions.AlazarSetClockSwitchOver = p;
 
 	api_functions.show_AlazarRead = 1;
-	p = dlsym(dll, "AlazarRead");
-	if(!p) { out("FATAL: cannot dlsym of AlazarRead"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarRead");
+	if(!p) { out("FATAL: cannot dlsym of AlazarRead\n"); }
 	api_functions.AlazarRead = p;
 
 	api_functions.show_AlazarReadEx = 1;
-	p = dlsym(dll, "AlazarReadEx");
-	if(!p) { out("FATAL: cannot dlsym of AlazarReadEx"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarReadEx");
+	if(!p) { out("FATAL: cannot dlsym of AlazarReadEx\n"); }
 	api_functions.AlazarReadEx = p;
 
 	api_functions.show_AlazarSetParameter = 1;
-	p = dlsym(dll, "AlazarSetParameter");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetParameter"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetParameter");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetParameter\n"); }
 	api_functions.AlazarSetParameter = p;
 
 	api_functions.show_AlazarSetParameterUL = 1;
-	p = dlsym(dll, "AlazarSetParameterUL");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetParameterUL"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetParameterUL");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetParameterUL\n"); }
 	api_functions.AlazarSetParameterUL = p;
 
 	api_functions.show_AlazarSetParameterLL = 1;
-	p = dlsym(dll, "AlazarSetParameterLL");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetParameterLL"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetParameterLL");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetParameterLL\n"); }
 	api_functions.AlazarSetParameterLL = p;
 
 	api_functions.show_AlazarGetParameter = 1;
-	p = dlsym(dll, "AlazarGetParameter");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetParameter"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetParameter");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetParameter\n"); }
 	api_functions.AlazarGetParameter = p;
 
 	api_functions.show_AlazarGetParameterUL = 1;
-	p = dlsym(dll, "AlazarGetParameterUL");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetParameterUL"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetParameterUL");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetParameterUL\n"); }
 	api_functions.AlazarGetParameterUL = p;
 
 	api_functions.show_AlazarGetParameterLL = 1;
-	p = dlsym(dll, "AlazarGetParameterLL");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetParameterLL"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetParameterLL");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetParameterLL\n"); }
 	api_functions.AlazarGetParameterLL = p;
 
 	api_functions.show_AlazarGetSystemHandle = 1;
-	p = dlsym(dll, "AlazarGetSystemHandle");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetSystemHandle"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetSystemHandle");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetSystemHandle\n"); }
 	api_functions.AlazarGetSystemHandle = p;
 
 	api_functions.show_AlazarNumOfSystems = 1;
-	p = dlsym(dll, "AlazarNumOfSystems");
-	if(!p) { out("FATAL: cannot dlsym of AlazarNumOfSystems"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarNumOfSystems");
+	if(!p) { out("FATAL: cannot dlsym of AlazarNumOfSystems\n"); }
 	api_functions.AlazarNumOfSystems = p;
 
 	api_functions.show_AlazarBoardsInSystemBySystemID = 1;
-	p = dlsym(dll, "AlazarBoardsInSystemBySystemID");
-	if(!p) { out("FATAL: cannot dlsym of AlazarBoardsInSystemBySystemID"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarBoardsInSystemBySystemID");
+	if(!p) { out("FATAL: cannot dlsym of AlazarBoardsInSystemBySystemID\n"); }
 	api_functions.AlazarBoardsInSystemBySystemID = p;
 
 	api_functions.show_AlazarBoardsInSystemByHandle = 1;
-	p = dlsym(dll, "AlazarBoardsInSystemByHandle");
-	if(!p) { out("FATAL: cannot dlsym of AlazarBoardsInSystemByHandle"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarBoardsInSystemByHandle");
+	if(!p) { out("FATAL: cannot dlsym of AlazarBoardsInSystemByHandle\n"); }
 	api_functions.AlazarBoardsInSystemByHandle = p;
 
 	api_functions.show_AlazarGetBoardBySystemID = 1;
-	p = dlsym(dll, "AlazarGetBoardBySystemID");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetBoardBySystemID"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetBoardBySystemID");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetBoardBySystemID\n"); }
 	api_functions.AlazarGetBoardBySystemID = p;
 
 	api_functions.show_AlazarGetBoardBySystemHandle = 1;
-	p = dlsym(dll, "AlazarGetBoardBySystemHandle");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetBoardBySystemHandle"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetBoardBySystemHandle");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetBoardBySystemHandle\n"); }
 	api_functions.AlazarGetBoardBySystemHandle = p;
 
 	api_functions.show_AlazarSetLED = 1;
-	p = dlsym(dll, "AlazarSetLED");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetLED"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetLED");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetLED\n"); }
 	api_functions.AlazarSetLED = p;
 
 	api_functions.show_AlazarQueryCapability = 1;
-	p = dlsym(dll, "AlazarQueryCapability");
-	if(!p) { out("FATAL: cannot dlsym of AlazarQueryCapability"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarQueryCapability");
+	if(!p) { out("FATAL: cannot dlsym of AlazarQueryCapability\n"); }
 	api_functions.AlazarQueryCapability = p;
 
 	api_functions.show_AlazarQueryCapabilityLL = 1;
-	p = dlsym(dll, "AlazarQueryCapabilityLL");
-	if(!p) { out("FATAL: cannot dlsym of AlazarQueryCapabilityLL"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarQueryCapabilityLL");
+	if(!p) { out("FATAL: cannot dlsym of AlazarQueryCapabilityLL\n"); }
 	api_functions.AlazarQueryCapabilityLL = p;
 
 	api_functions.show_AlazarMaxSglTransfer = 1;
-	p = dlsym(dll, "AlazarMaxSglTransfer");
-	if(!p) { out("FATAL: cannot dlsym of AlazarMaxSglTransfer"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarMaxSglTransfer");
+	if(!p) { out("FATAL: cannot dlsym of AlazarMaxSglTransfer\n"); }
 	api_functions.AlazarMaxSglTransfer = p;
 
 	api_functions.show_AlazarGetMaxRecordsCapable = 1;
-	p = dlsym(dll, "AlazarGetMaxRecordsCapable");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetMaxRecordsCapable"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetMaxRecordsCapable");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetMaxRecordsCapable\n"); }
 	api_functions.AlazarGetMaxRecordsCapable = p;
 
 	api_functions.show_AlazarGetWhoTriggeredBySystemHandle = 1;
-	p = dlsym(dll, "AlazarGetWhoTriggeredBySystemHandle");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetWhoTriggeredBySystemHandle"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetWhoTriggeredBySystemHandle");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetWhoTriggeredBySystemHandle\n"); }
 	api_functions.AlazarGetWhoTriggeredBySystemHandle = p;
 
 	api_functions.show_AlazarGetWhoTriggeredBySystemID = 1;
-	p = dlsym(dll, "AlazarGetWhoTriggeredBySystemID");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetWhoTriggeredBySystemID"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarGetWhoTriggeredBySystemID");
+	if(!p) { out("FATAL: cannot dlsym of AlazarGetWhoTriggeredBySystemID\n"); }
 	api_functions.AlazarGetWhoTriggeredBySystemID = p;
 
 	api_functions.show_AlazarSetBWLimit = 1;
-	p = dlsym(dll, "AlazarSetBWLimit");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetBWLimit"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetBWLimit");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetBWLimit\n"); }
 	api_functions.AlazarSetBWLimit = p;
 
 	api_functions.show_AlazarSleepDevice = 1;
-	p = dlsym(dll, "AlazarSleepDevice");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSleepDevice"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSleepDevice");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSleepDevice\n"); }
 	api_functions.AlazarSleepDevice = p;
 
 	api_functions.show_AlazarBeforeAsyncRead = 1;
-	p = dlsym(dll, "AlazarBeforeAsyncRead");
-	if(!p) { out("FATAL: cannot dlsym of AlazarBeforeAsyncRead"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarBeforeAsyncRead");
+	if(!p) { out("FATAL: cannot dlsym of AlazarBeforeAsyncRead\n"); }
 	api_functions.AlazarBeforeAsyncRead = p;
 
 	api_functions.show_AlazarAbortAsyncRead = 1;
-	p = dlsym(dll, "AlazarAbortAsyncRead");
-	if(!p) { out("FATAL: cannot dlsym of AlazarAbortAsyncRead"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarAbortAsyncRead");
+	if(!p) { out("FATAL: cannot dlsym of AlazarAbortAsyncRead\n"); }
 	api_functions.AlazarAbortAsyncRead = p;
 
 	api_functions.show_AlazarPostAsyncBuffer = 1;
-	p = dlsym(dll, "AlazarPostAsyncBuffer");
-	if(!p) { out("FATAL: cannot dlsym of AlazarPostAsyncBuffer"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarPostAsyncBuffer");
+	if(!p) { out("FATAL: cannot dlsym of AlazarPostAsyncBuffer\n"); }
 	api_functions.AlazarPostAsyncBuffer = p;
 
 	api_functions.show_AlazarWaitAsyncBufferComplete = 1;
-	p = dlsym(dll, "AlazarWaitAsyncBufferComplete");
-	if(!p) { out("FATAL: cannot dlsym of AlazarWaitAsyncBufferComplete"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarWaitAsyncBufferComplete");
+	if(!p) { out("FATAL: cannot dlsym of AlazarWaitAsyncBufferComplete\n"); }
 	api_functions.AlazarWaitAsyncBufferComplete = p;
 
 	api_functions.show_AlazarWaitNextAsyncBufferComplete = 1;
-	p = dlsym(dll, "AlazarWaitNextAsyncBufferComplete");
-	if(!p) { out("FATAL: cannot dlsym of AlazarWaitNextAsyncBufferComplete"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarWaitNextAsyncBufferComplete");
+	if(!p) { out("FATAL: cannot dlsym of AlazarWaitNextAsyncBufferComplete\n"); }
 	api_functions.AlazarWaitNextAsyncBufferComplete = p;
 
-	api_functions.show_AlazarCreateStreamFile = 1;
-	p = dlsym(dll, "AlazarCreateStreamFile");
-	if(!p) { out("FATAL: cannot dlsym of AlazarCreateStreamFile"); abort(); }
-	api_functions.AlazarCreateStreamFile = p;
-
 	api_functions.show_AlazarResetTimeStamp = 1;
-	p = dlsym(dll, "AlazarResetTimeStamp");
-	if(!p) { out("FATAL: cannot dlsym of AlazarResetTimeStamp"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarResetTimeStamp");
+	if(!p) { out("FATAL: cannot dlsym of AlazarResetTimeStamp\n"); }
 	api_functions.AlazarResetTimeStamp = p;
 
 	api_functions.show_AlazarReadRegister = 1;
-	p = dlsym(dll, "AlazarReadRegister");
-	if(!p) { out("FATAL: cannot dlsym of AlazarReadRegister"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarReadRegister");
+	if(!p) { out("FATAL: cannot dlsym of AlazarReadRegister\n"); }
 	api_functions.AlazarReadRegister = p;
 
 	api_functions.show_AlazarWriteRegister = 1;
-	p = dlsym(dll, "AlazarWriteRegister");
-	if(!p) { out("FATAL: cannot dlsym of AlazarWriteRegister"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarWriteRegister");
+	if(!p) { out("FATAL: cannot dlsym of AlazarWriteRegister\n"); }
 	api_functions.AlazarWriteRegister = p;
 
-	api_functions.show_ReadC = 1;
-	p = dlsym(dll, "ReadC");
-	if(!p) { out("FATAL: cannot dlsym of ReadC"); abort(); }
-	api_functions.ReadC = p;
-
-	api_functions.show_WriteC = 1;
-	p = dlsym(dll, "WriteC");
-	if(!p) { out("FATAL: cannot dlsym of WriteC"); abort(); }
-	api_functions.WriteC = p;
-
-	api_functions.show_AlazarGetTriggerAddressA = 1;
-	p = dlsym(dll, "AlazarGetTriggerAddressA");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetTriggerAddressA"); abort(); }
-	api_functions.AlazarGetTriggerAddressA = p;
-
-	api_functions.show_AlazarGetTriggerAddressB = 1;
-	p = dlsym(dll, "AlazarGetTriggerAddressB");
-	if(!p) { out("FATAL: cannot dlsym of AlazarGetTriggerAddressB"); abort(); }
-	api_functions.AlazarGetTriggerAddressB = p;
-
 	api_functions.show_ATS9462FlashSectorPageRead = 1;
-	p = dlsym(dll, "ATS9462FlashSectorPageRead");
-	if(!p) { out("FATAL: cannot dlsym of ATS9462FlashSectorPageRead"); abort(); }
+	p = dlsym(RTLD_NEXT, "ATS9462FlashSectorPageRead");
+	if(!p) { out("FATAL: cannot dlsym of ATS9462FlashSectorPageRead\n"); }
 	api_functions.ATS9462FlashSectorPageRead = p;
 
 	api_functions.show_ATS9462PageWriteToFlash = 1;
-	p = dlsym(dll, "ATS9462PageWriteToFlash");
-	if(!p) { out("FATAL: cannot dlsym of ATS9462PageWriteToFlash"); abort(); }
+	p = dlsym(RTLD_NEXT, "ATS9462PageWriteToFlash");
+	if(!p) { out("FATAL: cannot dlsym of ATS9462PageWriteToFlash\n"); }
 	api_functions.ATS9462PageWriteToFlash = p;
 
 	api_functions.show_ATS9462FlashSectorErase = 1;
-	p = dlsym(dll, "ATS9462FlashSectorErase");
-	if(!p) { out("FATAL: cannot dlsym of ATS9462FlashSectorErase"); abort(); }
+	p = dlsym(RTLD_NEXT, "ATS9462FlashSectorErase");
+	if(!p) { out("FATAL: cannot dlsym of ATS9462FlashSectorErase\n"); }
 	api_functions.ATS9462FlashSectorErase = p;
 
 	api_functions.show_ATS9462FlashChipErase = 1;
-	p = dlsym(dll, "ATS9462FlashChipErase");
-	if(!p) { out("FATAL: cannot dlsym of ATS9462FlashChipErase"); abort(); }
+	p = dlsym(RTLD_NEXT, "ATS9462FlashChipErase");
+	if(!p) { out("FATAL: cannot dlsym of ATS9462FlashChipErase\n"); }
 	api_functions.ATS9462FlashChipErase = p;
 
 	api_functions.show_SetControlCommand = 1;
-	p = dlsym(dll, "SetControlCommand");
-	if(!p) { out("FATAL: cannot dlsym of SetControlCommand"); abort(); }
+	p = dlsym(RTLD_NEXT, "SetControlCommand");
+	if(!p) { out("FATAL: cannot dlsym of SetControlCommand\n"); }
 	api_functions.SetControlCommand = p;
 
 	api_functions.show_AlazarDACSetting = 1;
-	p = dlsym(dll, "AlazarDACSetting");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDACSetting"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDACSetting");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDACSetting\n"); }
 	api_functions.AlazarDACSetting = p;
 
 	api_functions.show_AlazarWrite = 1;
-	p = dlsym(dll, "AlazarWrite");
-	if(!p) { out("FATAL: cannot dlsym of AlazarWrite"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarWrite");
+	if(!p) { out("FATAL: cannot dlsym of AlazarWrite\n"); }
 	api_functions.AlazarWrite = p;
 
 	api_functions.show_AlazarConfigureAuxIO = 1;
-	p = dlsym(dll, "AlazarConfigureAuxIO");
-	if(!p) { out("FATAL: cannot dlsym of AlazarConfigureAuxIO"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarConfigureAuxIO");
+	if(!p) { out("FATAL: cannot dlsym of AlazarConfigureAuxIO\n"); }
 	api_functions.AlazarConfigureAuxIO = p;
 
-	api_functions.show_AlazarErrorToText = 1;
-	p = dlsym(dll, "AlazarErrorToText");
-	if(!p) { out("FATAL: cannot dlsym of AlazarErrorToText"); abort(); }
-	api_functions.AlazarErrorToText = p;
-
 	api_functions.show_AlazarConfigureSampleSkipping = 1;
-	p = dlsym(dll, "AlazarConfigureSampleSkipping");
-	if(!p) { out("FATAL: cannot dlsym of AlazarConfigureSampleSkipping"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarConfigureSampleSkipping");
+	if(!p) { out("FATAL: cannot dlsym of AlazarConfigureSampleSkipping\n"); }
 	api_functions.AlazarConfigureSampleSkipping = p;
 
 	api_functions.show_AlazarCoprocessorRegisterRead = 1;
-	p = dlsym(dll, "AlazarCoprocessorRegisterRead");
-	if(!p) { out("FATAL: cannot dlsym of AlazarCoprocessorRegisterRead"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarCoprocessorRegisterRead");
+	if(!p) { out("FATAL: cannot dlsym of AlazarCoprocessorRegisterRead\n"); }
 	api_functions.AlazarCoprocessorRegisterRead = p;
 
 	api_functions.show_AlazarCoprocessorRegisterWrite = 1;
-	p = dlsym(dll, "AlazarCoprocessorRegisterWrite");
-	if(!p) { out("FATAL: cannot dlsym of AlazarCoprocessorRegisterWrite"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarCoprocessorRegisterWrite");
+	if(!p) { out("FATAL: cannot dlsym of AlazarCoprocessorRegisterWrite\n"); }
 	api_functions.AlazarCoprocessorRegisterWrite = p;
 
 	api_functions.show_AlazarCoprocessorDownloadA = 1;
-	p = dlsym(dll, "AlazarCoprocessorDownloadA");
-	if(!p) { out("FATAL: cannot dlsym of AlazarCoprocessorDownloadA"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarCoprocessorDownloadA");
+	if(!p) { out("FATAL: cannot dlsym of AlazarCoprocessorDownloadA\n"); }
 	api_functions.AlazarCoprocessorDownloadA = p;
 
 	api_functions.show_AlazarCoprocessorDownloadBuffer = 1;
-	p = dlsym(dll, "AlazarCoprocessorDownloadBuffer");
-	if(!p) { out("FATAL: cannot dlsym of AlazarCoprocessorDownloadBuffer"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarCoprocessorDownloadBuffer");
+	if(!p) { out("FATAL: cannot dlsym of AlazarCoprocessorDownloadBuffer\n"); }
 	api_functions.AlazarCoprocessorDownloadBuffer = p;
 
 	api_functions.show_AlazarConfigureRecordAverage = 1;
-	p = dlsym(dll, "AlazarConfigureRecordAverage");
-	if(!p) { out("FATAL: cannot dlsym of AlazarConfigureRecordAverage"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarConfigureRecordAverage");
+	if(!p) { out("FATAL: cannot dlsym of AlazarConfigureRecordAverage\n"); }
 	api_functions.AlazarConfigureRecordAverage = p;
 
 	api_functions.show_AlazarAllocBufferU8 = 1;
-	p = dlsym(dll, "AlazarAllocBufferU8");
-	if(!p) { out("FATAL: cannot dlsym of AlazarAllocBufferU8"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarAllocBufferU8");
+	if(!p) { out("FATAL: cannot dlsym of AlazarAllocBufferU8\n"); }
 	api_functions.AlazarAllocBufferU8 = p;
 
 	api_functions.show_AlazarFreeBufferU8 = 1;
-	p = dlsym(dll, "AlazarFreeBufferU8");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFreeBufferU8"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFreeBufferU8");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFreeBufferU8\n"); }
 	api_functions.AlazarFreeBufferU8 = p;
 
 	api_functions.show_AlazarAllocBufferU16 = 1;
-	p = dlsym(dll, "AlazarAllocBufferU16");
-	if(!p) { out("FATAL: cannot dlsym of AlazarAllocBufferU16"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarAllocBufferU16");
+	if(!p) { out("FATAL: cannot dlsym of AlazarAllocBufferU16\n"); }
 	api_functions.AlazarAllocBufferU16 = p;
 
 	api_functions.show_AlazarFreeBufferU16 = 1;
-	p = dlsym(dll, "AlazarFreeBufferU16");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFreeBufferU16"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFreeBufferU16");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFreeBufferU16\n"); }
 	api_functions.AlazarFreeBufferU16 = p;
 
 	api_functions.show_AlazarAllocBufferU8Ex = 1;
-	p = dlsym(dll, "AlazarAllocBufferU8Ex");
-	if(!p) { out("FATAL: cannot dlsym of AlazarAllocBufferU8Ex"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarAllocBufferU8Ex");
+	if(!p) { out("FATAL: cannot dlsym of AlazarAllocBufferU8Ex\n"); }
 	api_functions.AlazarAllocBufferU8Ex = p;
 
 	api_functions.show_AlazarFreeBufferU8Ex = 1;
-	p = dlsym(dll, "AlazarFreeBufferU8Ex");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFreeBufferU8Ex"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFreeBufferU8Ex");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFreeBufferU8Ex\n"); }
 	api_functions.AlazarFreeBufferU8Ex = p;
 
 	api_functions.show_AlazarAllocBufferU16Ex = 1;
-	p = dlsym(dll, "AlazarAllocBufferU16Ex");
-	if(!p) { out("FATAL: cannot dlsym of AlazarAllocBufferU16Ex"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarAllocBufferU16Ex");
+	if(!p) { out("FATAL: cannot dlsym of AlazarAllocBufferU16Ex\n"); }
 	api_functions.AlazarAllocBufferU16Ex = p;
 
 	api_functions.show_AlazarFreeBufferU16Ex = 1;
-	p = dlsym(dll, "AlazarFreeBufferU16Ex");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFreeBufferU16Ex"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFreeBufferU16Ex");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFreeBufferU16Ex\n"); }
 	api_functions.AlazarFreeBufferU16Ex = p;
 
 	api_functions.show_AlazarConfigureLSB = 1;
-	p = dlsym(dll, "AlazarConfigureLSB");
-	if(!p) { out("FATAL: cannot dlsym of AlazarConfigureLSB"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarConfigureLSB");
+	if(!p) { out("FATAL: cannot dlsym of AlazarConfigureLSB\n"); }
 	api_functions.AlazarConfigureLSB = p;
 
 	api_functions.show_AlazarExtractFFTNPTFooters = 1;
-	p = dlsym(dll, "AlazarExtractFFTNPTFooters");
-	if(!p) { out("FATAL: cannot dlsym of AlazarExtractFFTNPTFooters"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarExtractFFTNPTFooters");
+	if(!p) { out("FATAL: cannot dlsym of AlazarExtractFFTNPTFooters\n"); }
 	api_functions.AlazarExtractFFTNPTFooters = p;
 
 	api_functions.show_AlazarExtractTimeDomainNPTFooters = 1;
-	p = dlsym(dll, "AlazarExtractTimeDomainNPTFooters");
-	if(!p) { out("FATAL: cannot dlsym of AlazarExtractTimeDomainNPTFooters"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarExtractTimeDomainNPTFooters");
+	if(!p) { out("FATAL: cannot dlsym of AlazarExtractTimeDomainNPTFooters\n"); }
 	api_functions.AlazarExtractTimeDomainNPTFooters = p;
 
 	api_functions.show_AlazarExtractNPTFooters = 1;
-	p = dlsym(dll, "AlazarExtractNPTFooters");
-	if(!p) { out("FATAL: cannot dlsym of AlazarExtractNPTFooters"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarExtractNPTFooters");
+	if(!p) { out("FATAL: cannot dlsym of AlazarExtractNPTFooters\n"); }
 	api_functions.AlazarExtractNPTFooters = p;
 
 	api_functions.show_AlazarDisableDSP = 1;
-	p = dlsym(dll, "AlazarDisableDSP");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDisableDSP"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDisableDSP");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDisableDSP\n"); }
 	api_functions.AlazarDisableDSP = p;
 
 	api_functions.show_AlazarOCTIgnoreBadClock = 1;
-	p = dlsym(dll, "AlazarOCTIgnoreBadClock");
-	if(!p) { out("FATAL: cannot dlsym of AlazarOCTIgnoreBadClock"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarOCTIgnoreBadClock");
+	if(!p) { out("FATAL: cannot dlsym of AlazarOCTIgnoreBadClock\n"); }
 	api_functions.AlazarOCTIgnoreBadClock = p;
 
 	api_functions.show_AlazarSetADCBackgroundCompensation = 1;
-	p = dlsym(dll, "AlazarSetADCBackgroundCompensation");
-	if(!p) { out("FATAL: cannot dlsym of AlazarSetADCBackgroundCompensation"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarSetADCBackgroundCompensation");
+	if(!p) { out("FATAL: cannot dlsym of AlazarSetADCBackgroundCompensation\n"); }
 	api_functions.AlazarSetADCBackgroundCompensation = p;
 
 	api_functions.show_AlazarDSPGetModules = 1;
-	p = dlsym(dll, "AlazarDSPGetModules");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetModules"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPGetModules");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetModules\n"); }
 	api_functions.AlazarDSPGetModules = p;
 
 	api_functions.show_AlazarDSPGetInfo = 1;
-	p = dlsym(dll, "AlazarDSPGetInfo");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetInfo"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPGetInfo");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetInfo\n"); }
 	api_functions.AlazarDSPGetInfo = p;
 
 	api_functions.show_AlazarDSPGenerateWindowFunction = 1;
-	p = dlsym(dll, "AlazarDSPGenerateWindowFunction");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGenerateWindowFunction"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPGenerateWindowFunction");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGenerateWindowFunction\n"); }
 	api_functions.AlazarDSPGenerateWindowFunction = p;
 
 	api_functions.show_AlazarFFTGetMaxTriggerRepeatRate = 1;
-	p = dlsym(dll, "AlazarFFTGetMaxTriggerRepeatRate");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFFTGetMaxTriggerRepeatRate"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFFTGetMaxTriggerRepeatRate");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFFTGetMaxTriggerRepeatRate\n"); }
 	api_functions.AlazarFFTGetMaxTriggerRepeatRate = p;
 
 	api_functions.show_AlazarFFTBackgroundSubtractionSetRecordS16 = 1;
-	p = dlsym(dll, "AlazarFFTBackgroundSubtractionSetRecordS16");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFFTBackgroundSubtractionSetRecordS16"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFFTBackgroundSubtractionSetRecordS16");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFFTBackgroundSubtractionSetRecordS16\n"); }
 	api_functions.AlazarFFTBackgroundSubtractionSetRecordS16 = p;
 
 	api_functions.show_AlazarFFTBackgroundSubtractionGetRecordS16 = 1;
-	p = dlsym(dll, "AlazarFFTBackgroundSubtractionGetRecordS16");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFFTBackgroundSubtractionGetRecordS16"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFFTBackgroundSubtractionGetRecordS16");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFFTBackgroundSubtractionGetRecordS16\n"); }
 	api_functions.AlazarFFTBackgroundSubtractionGetRecordS16 = p;
 
 	api_functions.show_AlazarFFTBackgroundSubtractionSetEnabled = 1;
-	p = dlsym(dll, "AlazarFFTBackgroundSubtractionSetEnabled");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFFTBackgroundSubtractionSetEnabled"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFFTBackgroundSubtractionSetEnabled");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFFTBackgroundSubtractionSetEnabled\n"); }
 	api_functions.AlazarFFTBackgroundSubtractionSetEnabled = p;
 
 	api_functions.show_AlazarFFTSetWindowFunction = 1;
-	p = dlsym(dll, "AlazarFFTSetWindowFunction");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFFTSetWindowFunction"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFFTSetWindowFunction");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFFTSetWindowFunction\n"); }
 	api_functions.AlazarFFTSetWindowFunction = p;
 
 	api_functions.show_AlazarFFTGetWindowFunction = 1;
-	p = dlsym(dll, "AlazarFFTGetWindowFunction");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFFTGetWindowFunction"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFFTGetWindowFunction");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFFTGetWindowFunction\n"); }
 	api_functions.AlazarFFTGetWindowFunction = p;
 
 	api_functions.show_AlazarFFTVerificationMode = 1;
-	p = dlsym(dll, "AlazarFFTVerificationMode");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFFTVerificationMode"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFFTVerificationMode");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFFTVerificationMode\n"); }
 	api_functions.AlazarFFTVerificationMode = p;
 
 	api_functions.show_AlazarFFTSetup = 1;
-	p = dlsym(dll, "AlazarFFTSetup");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFFTSetup"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFFTSetup");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFFTSetup\n"); }
 	api_functions.AlazarFFTSetup = p;
 
 	api_functions.show_AlazarFFTSetScalingAndSlicing = 1;
-	p = dlsym(dll, "AlazarFFTSetScalingAndSlicing");
-	if(!p) { out("FATAL: cannot dlsym of AlazarFFTSetScalingAndSlicing"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarFFTSetScalingAndSlicing");
+	if(!p) { out("FATAL: cannot dlsym of AlazarFFTSetScalingAndSlicing\n"); }
 	api_functions.AlazarFFTSetScalingAndSlicing = p;
 
 	api_functions.show_AlazarDSPGetBuffer = 1;
-	p = dlsym(dll, "AlazarDSPGetBuffer");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetBuffer"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPGetBuffer");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetBuffer\n"); }
 	api_functions.AlazarDSPGetBuffer = p;
 
 	api_functions.show_AlazarDSPGetNextBuffer = 1;
-	p = dlsym(dll, "AlazarDSPGetNextBuffer");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetNextBuffer"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPGetNextBuffer");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetNextBuffer\n"); }
 	api_functions.AlazarDSPGetNextBuffer = p;
 
 	api_functions.show_AlazarDSPGetParameterU32 = 1;
-	p = dlsym(dll, "AlazarDSPGetParameterU32");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetParameterU32"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPGetParameterU32");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetParameterU32\n"); }
 	api_functions.AlazarDSPGetParameterU32 = p;
 
 	api_functions.show_AlazarDSPSetParameterU32 = 1;
-	p = dlsym(dll, "AlazarDSPSetParameterU32");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPSetParameterU32"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPSetParameterU32");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPSetParameterU32\n"); }
 	api_functions.AlazarDSPSetParameterU32 = p;
 
 	api_functions.show_AlazarDSPGetParameterS32 = 1;
-	p = dlsym(dll, "AlazarDSPGetParameterS32");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetParameterS32"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPGetParameterS32");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetParameterS32\n"); }
 	api_functions.AlazarDSPGetParameterS32 = p;
 
 	api_functions.show_AlazarDSPSetParameterS32 = 1;
-	p = dlsym(dll, "AlazarDSPSetParameterS32");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPSetParameterS32"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPSetParameterS32");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPSetParameterS32\n"); }
 	api_functions.AlazarDSPSetParameterS32 = p;
 
 	api_functions.show_AlazarDSPGetParameterFloat = 1;
-	p = dlsym(dll, "AlazarDSPGetParameterFloat");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetParameterFloat"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPGetParameterFloat");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPGetParameterFloat\n"); }
 	api_functions.AlazarDSPGetParameterFloat = p;
 
 	api_functions.show_AlazarDSPSetParameterFloat = 1;
-	p = dlsym(dll, "AlazarDSPSetParameterFloat");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPSetParameterFloat"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPSetParameterFloat");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPSetParameterFloat\n"); }
 	api_functions.AlazarDSPSetParameterFloat = p;
 
 	api_functions.show_AlazarDSPConfigureSelfTrigger = 1;
-	p = dlsym(dll, "AlazarDSPConfigureSelfTrigger");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPConfigureSelfTrigger"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPConfigureSelfTrigger");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPConfigureSelfTrigger\n"); }
 	api_functions.AlazarDSPConfigureSelfTrigger = p;
 
 	api_functions.show_AlazarDSPConfigureSampleSkipping = 1;
-	p = dlsym(dll, "AlazarDSPConfigureSampleSkipping");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPConfigureSampleSkipping"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPConfigureSampleSkipping");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPConfigureSampleSkipping\n"); }
 	api_functions.AlazarDSPConfigureSampleSkipping = p;
 
 	api_functions.show_AlazarDSPAbortCapture = 1;
-	p = dlsym(dll, "AlazarDSPAbortCapture");
-	if(!p) { out("FATAL: cannot dlsym of AlazarDSPAbortCapture"); abort(); }
+	p = dlsym(RTLD_NEXT, "AlazarDSPAbortCapture");
+	if(!p) { out("FATAL: cannot dlsym of AlazarDSPAbortCapture\n"); }
 	api_functions.AlazarDSPAbortCapture = p;
 
 }
@@ -1025,7 +965,7 @@ RETURN_CODE AlazarGetOEMFPGAName(int opcodeID, char *FullPath, unsigned long *er
 	RETURN_CODE  result = api_functions.AlazarGetOEMFPGAName(opcodeID, FullPath, error);
 	if (api_functions.show_AlazarGetOEMFPGAName && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1049,7 +989,7 @@ RETURN_CODE AlazarOEMSetWorkingDirectory(char *wDir, unsigned long *error)
 	RETURN_CODE  result = api_functions.AlazarOEMSetWorkingDirectory(wDir, error);
 	if (api_functions.show_AlazarOEMSetWorkingDirectory && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1073,7 +1013,7 @@ RETURN_CODE AlazarOEMGetWorkingDirectory(char *wDir, unsigned long *error)
 	RETURN_CODE  result = api_functions.AlazarOEMGetWorkingDirectory(wDir, error);
 	if (api_functions.show_AlazarOEMGetWorkingDirectory && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1104,7 +1044,7 @@ RETURN_CODE AlazarParseFPGAName(const char *FullName, char *Name, U32 *Type, U32
 	RETURN_CODE  result = api_functions.AlazarParseFPGAName(FullName, Name, Type, MemSize, MajVer, MinVer, MajRev, MinRev, error);
 	if (api_functions.show_AlazarParseFPGAName && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1129,7 +1069,7 @@ RETURN_CODE AlazarDownLoadFPGA(HANDLE handle, char *FileName, U32 *RetValue)
 	RETURN_CODE  result = api_functions.AlazarDownLoadFPGA(handle, FileName, RetValue);
 	if (api_functions.show_AlazarDownLoadFPGA && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1154,7 +1094,7 @@ RETURN_CODE AlazarOEMDownLoadFPGA(HANDLE handle, char *FileName, U32 *RetValue)
 	RETURN_CODE  result = api_functions.AlazarOEMDownLoadFPGA(handle, FileName, RetValue);
 	if (api_functions.show_AlazarOEMDownLoadFPGA && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1180,7 +1120,7 @@ RETURN_CODE AlazarReadWriteTest(HANDLE handle, U32 *Buffer, U32 SizeToWrite, U32
 	RETURN_CODE  result = api_functions.AlazarReadWriteTest(handle, Buffer, SizeToWrite, SizeToRead);
 	if (api_functions.show_AlazarReadWriteTest && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1204,31 +1144,7 @@ RETURN_CODE AlazarMemoryTest(HANDLE handle, U32 *errors)
 	RETURN_CODE  result = api_functions.AlazarMemoryTest(handle, errors);
 	if (api_functions.show_AlazarMemoryTest && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
-		fclose(out);
-	}
-	return result;
-}
-RETURN_CODE AlazarBusyFlag(HANDLE handle, int *BusyFlag)
-{
-	if (last_func!=9) repeat_count=0;
-
-	last_func = 9; repeat_count++;
-	if (api_functions.show_AlazarBusyFlag && repeat_count<=MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		if (repeat_count == MAX_REPEAT) {
-			fprintf(out, "... repeated call to AlazarBusyFlag()\n");
-		} else {
-			fprintf(out, "RETURN_CODE AlazarBusyFlag()\n");
-			fprintf(out, "\tHANDLE handle: %p\n", handle);
-			fprintf(out, "\tint * BusyFlag: %p\n", BusyFlag);
-		}
-		fclose(out);
-	}
-	RETURN_CODE  result = api_functions.AlazarBusyFlag(handle, BusyFlag);
-	if (api_functions.show_AlazarBusyFlag && repeat_count<MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1252,7 +1168,7 @@ RETURN_CODE AlazarTriggeredFlag(HANDLE handle, int *TriggeredFlag)
 	RETURN_CODE  result = api_functions.AlazarTriggeredFlag(handle, TriggeredFlag);
 	if (api_functions.show_AlazarTriggeredFlag && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1277,7 +1193,7 @@ RETURN_CODE AlazarGetSDKVersion(U8 *major, U8 *minor, U8 *revision)
 	RETURN_CODE  result = api_functions.AlazarGetSDKVersion(major, minor, revision);
 	if (api_functions.show_AlazarGetSDKVersion && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1302,7 +1218,7 @@ RETURN_CODE AlazarGetDriverVersion(U8 *major, U8 *minor, U8 *revision)
 	RETURN_CODE  result = api_functions.AlazarGetDriverVersion(major, minor, revision);
 	if (api_functions.show_AlazarGetDriverVersion && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1327,7 +1243,7 @@ RETURN_CODE AlazarGetBoardRevision(HANDLE handle, U8 *major, U8 *minor)
 	RETURN_CODE  result = api_functions.AlazarGetBoardRevision(handle, major, minor);
 	if (api_functions.show_AlazarGetBoardRevision && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1437,7 +1353,7 @@ RETURN_CODE AlazarGetCPLDVersion(HANDLE handle, U8 *major, U8 *minor)
 	RETURN_CODE  result = api_functions.AlazarGetCPLDVersion(handle, major, minor);
 	if (api_functions.show_AlazarGetCPLDVersion && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1460,7 +1376,7 @@ RETURN_CODE AlazarAutoCalibrate(HANDLE handle)
 	RETURN_CODE  result = api_functions.AlazarAutoCalibrate(handle);
 	if (api_functions.show_AlazarAutoCalibrate && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1485,7 +1401,7 @@ RETURN_CODE AlazarGetChannelInfo(HANDLE handle, U32 *memorySize, U8 *bitsPerSamp
 	RETURN_CODE  result = api_functions.AlazarGetChannelInfo(handle, memorySize, bitsPerSample);
 	if (api_functions.show_AlazarGetChannelInfo && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1510,7 +1426,7 @@ RETURN_CODE AlazarGetChannelInfoEx(HANDLE handle, S64 *memorySize, U8 *bitsPerSa
 	RETURN_CODE  result = api_functions.AlazarGetChannelInfoEx(handle, memorySize, bitsPerSample);
 	if (api_functions.show_AlazarGetChannelInfoEx && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1537,7 +1453,7 @@ RETURN_CODE AlazarInputControl(HANDLE handle, U8 channel, U32 coupling, U32 inpu
 	RETURN_CODE  result = api_functions.AlazarInputControl(handle, channel, coupling, inputRange, impedance);
 	if (api_functions.show_AlazarInputControl && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1564,7 +1480,7 @@ RETURN_CODE AlazarInputControlEx(HANDLE handle, U32 channel, U32 couplingId, U32
 	RETURN_CODE  result = api_functions.AlazarInputControlEx(handle, channel, couplingId, rangeId, impedenceId);
 	if (api_functions.show_AlazarInputControlEx && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1590,7 +1506,7 @@ RETURN_CODE AlazarSetPosition(HANDLE handle, U8 Channel, int PMPercent, U32 Inpu
 	RETURN_CODE  result = api_functions.AlazarSetPosition(handle, Channel, PMPercent, InputRange);
 	if (api_functions.show_AlazarSetPosition && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1615,7 +1531,7 @@ RETURN_CODE AlazarSetExternalTrigger(HANDLE handle, U32 couplingId, U32 rangeId)
 	RETURN_CODE  result = api_functions.AlazarSetExternalTrigger(handle, couplingId, rangeId);
 	if (api_functions.show_AlazarSetExternalTrigger && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1639,7 +1555,7 @@ RETURN_CODE AlazarSetTriggerDelay(HANDLE handle, U32 Delay)
 	RETURN_CODE  result = api_functions.AlazarSetTriggerDelay(handle, Delay);
 	if (api_functions.show_AlazarSetTriggerDelay && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1663,7 +1579,7 @@ RETURN_CODE AlazarSetTriggerTimeOut(HANDLE handle, U32 timeout_ticks)
 	RETURN_CODE  result = api_functions.AlazarSetTriggerTimeOut(handle, timeout_ticks);
 	if (api_functions.show_AlazarSetTriggerTimeOut && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1687,33 +1603,6 @@ U32 AlazarTriggerTimedOut(HANDLE h)
 	if (api_functions.show_AlazarTriggerTimedOut && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
 		fprintf(out, "\t=> %d (0x%08x)\n", result, result);
-		fclose(out);
-	}
-	return result;
-}
-RETURN_CODE AlazarGetTriggerAddress(HANDLE handle, U32 Record, U32 *TriggerAddress, U32 *TimeStampHighPart, U32 *TimeStampLowPart)
-{
-	if (last_func!=29) repeat_count=0;
-
-	last_func = 29; repeat_count++;
-	if (api_functions.show_AlazarGetTriggerAddress && repeat_count<=MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		if (repeat_count == MAX_REPEAT) {
-			fprintf(out, "... repeated call to AlazarGetTriggerAddress()\n");
-		} else {
-			fprintf(out, "RETURN_CODE AlazarGetTriggerAddress()\n");
-			fprintf(out, "\tHANDLE handle: %p\n", handle);
-			fprintf(out, "\tU32 Record: %d (0x%08x)\n", Record, Record);
-			fprintf(out, "\tU32 * TriggerAddress: %p\n", TriggerAddress);
-			fprintf(out, "\tU32 * TimeStampHighPart: %p\n", TimeStampHighPart);
-			fprintf(out, "\tU32 * TimeStampLowPart: %p\n", TimeStampLowPart);
-		}
-		fclose(out);
-	}
-	RETURN_CODE  result = api_functions.AlazarGetTriggerAddress(handle, Record, TriggerAddress, TimeStampHighPart, TimeStampLowPart);
-	if (api_functions.show_AlazarGetTriggerAddress && repeat_count<MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1745,7 +1634,7 @@ RETURN_CODE AlazarSetTriggerOperation(HANDLE handle, U32 TriggerOperation, U32 T
 	RETURN_CODE  result = api_functions.AlazarSetTriggerOperation(handle, TriggerOperation, TriggerEngine1, Source1, Slope1, Level1, TriggerEngine2, Source2, Slope2, Level2);
 	if (api_functions.show_AlazarSetTriggerOperation && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1770,7 +1659,7 @@ RETURN_CODE AlazarGetTriggerTimestamp(HANDLE handle, U32 Record, U64 *Timestamp_
 	RETURN_CODE  result = api_functions.AlazarGetTriggerTimestamp(handle, Record, Timestamp_samples);
 	if (api_functions.show_AlazarGetTriggerTimestamp && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1796,7 +1685,7 @@ RETURN_CODE AlazarSetTriggerOperationForScanning(HANDLE handle, U32 slopeId, U32
 	RETURN_CODE  result = api_functions.AlazarSetTriggerOperationForScanning(handle, slopeId, level, options);
 	if (api_functions.show_AlazarSetTriggerOperationForScanning && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1819,7 +1708,7 @@ RETURN_CODE AlazarAbortCapture(HANDLE handle)
 	RETURN_CODE  result = api_functions.AlazarAbortCapture(handle);
 	if (api_functions.show_AlazarAbortCapture && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1842,7 +1731,7 @@ RETURN_CODE AlazarForceTrigger(HANDLE handle)
 	RETURN_CODE  result = api_functions.AlazarForceTrigger(handle);
 	if (api_functions.show_AlazarForceTrigger && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1865,7 +1754,7 @@ RETURN_CODE AlazarForceTriggerEnable(HANDLE handle)
 	RETURN_CODE  result = api_functions.AlazarForceTriggerEnable(handle);
 	if (api_functions.show_AlazarForceTriggerEnable && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1888,7 +1777,7 @@ RETURN_CODE AlazarStartCapture(HANDLE handle)
 	RETURN_CODE  result = api_functions.AlazarStartCapture(handle);
 	if (api_functions.show_AlazarStartCapture && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1912,7 +1801,7 @@ RETURN_CODE AlazarCaptureMode(HANDLE handle, U32 Mode)
 	RETURN_CODE  result = api_functions.AlazarCaptureMode(handle, Mode);
 	if (api_functions.show_AlazarCaptureMode && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1940,7 +1829,7 @@ RETURN_CODE AlazarStreamCapture(HANDLE handle, void *Buffer, U32 BufferSize, U32
 	RETURN_CODE  result = api_functions.AlazarStreamCapture(handle, Buffer, BufferSize, DeviceOption, ChannelSelect, error);
 	if (api_functions.show_AlazarStreamCapture && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -1973,7 +1862,7 @@ RETURN_CODE AlazarHyperDisp(HANDLE handle, void *buffer, U32 bufferSize, U8 *vie
 	RETURN_CODE  result = api_functions.AlazarHyperDisp(handle, buffer, bufferSize, viewBuffer, viewBufferSize, numOfPixels, option, channelSelect, record, transferOffset, error);
 	if (api_functions.show_AlazarHyperDisp && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2001,7 +1890,7 @@ RETURN_CODE AlazarFastPRRCapture(HANDLE handle, void *Buffer, U32 BufferSize, U3
 	RETURN_CODE  result = api_functions.AlazarFastPRRCapture(handle, Buffer, BufferSize, DeviceOption, ChannelSelect, error);
 	if (api_functions.show_AlazarFastPRRCapture && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2117,7 +2006,7 @@ RETURN_CODE AlazarSetRecordCount(HANDLE handle, U32 Count)
 	RETURN_CODE  result = api_functions.AlazarSetRecordCount(handle, Count);
 	if (api_functions.show_AlazarSetRecordCount && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2142,7 +2031,7 @@ RETURN_CODE AlazarSetRecordSize(HANDLE handle, U32 preTriggerSamples, U32 postTr
 	RETURN_CODE  result = api_functions.AlazarSetRecordSize(handle, preTriggerSamples, postTriggerSamples);
 	if (api_functions.show_AlazarSetRecordSize && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2169,7 +2058,7 @@ RETURN_CODE AlazarSetCaptureClock(HANDLE handle, U32 source, U32 sampleRateIdOrV
 	RETURN_CODE  result = api_functions.AlazarSetCaptureClock(handle, source, sampleRateIdOrValue, edgeId, decimation);
 	if (api_functions.show_AlazarSetCaptureClock && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2193,7 +2082,7 @@ RETURN_CODE AlazarSetExternalClockLevel(HANDLE handle, float level_percent)
 	RETURN_CODE  result = api_functions.AlazarSetExternalClockLevel(handle, level_percent);
 	if (api_functions.show_AlazarSetExternalClockLevel && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2219,7 +2108,7 @@ RETURN_CODE AlazarSetClockSwitchOver(HANDLE handleBoard, U32 uMode, U32 uDummyCl
 	RETURN_CODE  result = api_functions.AlazarSetClockSwitchOver(handleBoard, uMode, uDummyClockOnTime_ns, uReserved);
 	if (api_functions.show_AlazarSetClockSwitchOver && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2303,7 +2192,7 @@ RETURN_CODE AlazarSetParameter(HANDLE handle, U8 channel, U32 parameter, long va
 	RETURN_CODE  result = api_functions.AlazarSetParameter(handle, channel, parameter, value);
 	if (api_functions.show_AlazarSetParameter && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2329,7 +2218,7 @@ RETURN_CODE AlazarSetParameterUL(HANDLE handle, U8 channel, U32 parameter, U32 v
 	RETURN_CODE  result = api_functions.AlazarSetParameterUL(handle, channel, parameter, value);
 	if (api_functions.show_AlazarSetParameterUL && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2355,7 +2244,7 @@ RETURN_CODE AlazarSetParameterLL(HANDLE handle, U8 channel, U32 parameter, S64 v
 	RETURN_CODE  result = api_functions.AlazarSetParameterLL(handle, channel, parameter, value);
 	if (api_functions.show_AlazarSetParameterLL && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2381,7 +2270,7 @@ RETURN_CODE AlazarGetParameter(HANDLE handle, U8 channel, U32 parameter, long *r
 	RETURN_CODE  result = api_functions.AlazarGetParameter(handle, channel, parameter, retValue);
 	if (api_functions.show_AlazarGetParameter && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2407,7 +2296,7 @@ RETURN_CODE AlazarGetParameterUL(HANDLE handle, U8 channel, U32 parameter, U32 *
 	RETURN_CODE  result = api_functions.AlazarGetParameterUL(handle, channel, parameter, retValue);
 	if (api_functions.show_AlazarGetParameterUL && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2433,7 +2322,7 @@ RETURN_CODE AlazarGetParameterLL(HANDLE handle, U8 channel, U32 parameter, S64 *
 	RETURN_CODE  result = api_functions.AlazarGetParameterLL(handle, channel, parameter, retValue);
 	if (api_functions.show_AlazarGetParameterLL && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2596,7 +2485,7 @@ RETURN_CODE AlazarSetLED(HANDLE handle, U32 state)
 	RETURN_CODE  result = api_functions.AlazarSetLED(handle, state);
 	if (api_functions.show_AlazarSetLED && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2622,7 +2511,7 @@ RETURN_CODE AlazarQueryCapability(HANDLE handle, U32 capability, U32 reserved, U
 	RETURN_CODE  result = api_functions.AlazarQueryCapability(handle, capability, reserved, retValue);
 	if (api_functions.show_AlazarQueryCapability && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2648,7 +2537,7 @@ RETURN_CODE AlazarQueryCapabilityLL(HANDLE handle, U32 capability, U32 reserved,
 	RETURN_CODE  result = api_functions.AlazarQueryCapabilityLL(handle, capability, reserved, retValue);
 	if (api_functions.show_AlazarQueryCapabilityLL && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2696,7 +2585,7 @@ RETURN_CODE AlazarGetMaxRecordsCapable(HANDLE handle, U32 samplesPerRecord, U32 
 	RETURN_CODE  result = api_functions.AlazarGetMaxRecordsCapable(handle, samplesPerRecord, maxRecordsPerCapture);
 	if (api_functions.show_AlazarGetMaxRecordsCapable && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2771,7 +2660,7 @@ RETURN_CODE AlazarSetBWLimit(HANDLE handle, U32 channel, U32 enable)
 	RETURN_CODE  result = api_functions.AlazarSetBWLimit(handle, channel, enable);
 	if (api_functions.show_AlazarSetBWLimit && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2795,7 +2684,7 @@ RETURN_CODE AlazarSleepDevice(HANDLE handle, U32 sleepState)
 	RETURN_CODE  result = api_functions.AlazarSleepDevice(handle, sleepState);
 	if (api_functions.show_AlazarSleepDevice && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2824,7 +2713,7 @@ RETURN_CODE AlazarBeforeAsyncRead(HANDLE handle, U32 channelSelect, long transfe
 	RETURN_CODE  result = api_functions.AlazarBeforeAsyncRead(handle, channelSelect, transferOffset, transferLength, recordsPerBuffer, recordsPerAcquisition, flags);
 	if (api_functions.show_AlazarBeforeAsyncRead && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2847,7 +2736,7 @@ RETURN_CODE AlazarAbortAsyncRead(HANDLE handle)
 	RETURN_CODE  result = api_functions.AlazarAbortAsyncRead(handle);
 	if (api_functions.show_AlazarAbortAsyncRead && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2872,7 +2761,7 @@ RETURN_CODE AlazarPostAsyncBuffer(HANDLE handle, void *buffer, U32 bufferLength_
 	RETURN_CODE  result = api_functions.AlazarPostAsyncBuffer(handle, buffer, bufferLength_bytes);
 	if (api_functions.show_AlazarPostAsyncBuffer && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2897,7 +2786,7 @@ RETURN_CODE AlazarWaitAsyncBufferComplete(HANDLE handle, void *buffer, U32 timeo
 	RETURN_CODE  result = api_functions.AlazarWaitAsyncBufferComplete(handle, buffer, timeout_ms);
 	if (api_functions.show_AlazarWaitAsyncBufferComplete && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2923,31 +2812,7 @@ RETURN_CODE AlazarWaitNextAsyncBufferComplete(HANDLE handle, void *buffer, U32 b
 	RETURN_CODE  result = api_functions.AlazarWaitNextAsyncBufferComplete(handle, buffer, bytesToCopy, timeout_ms);
 	if (api_functions.show_AlazarWaitNextAsyncBufferComplete && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
-		fclose(out);
-	}
-	return result;
-}
-RETURN_CODE AlazarCreateStreamFile(HANDLE handle, const char *filePath)
-{
-	if (last_func!=78) repeat_count=0;
-
-	last_func = 78; repeat_count++;
-	if (api_functions.show_AlazarCreateStreamFile && repeat_count<=MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		if (repeat_count == MAX_REPEAT) {
-			fprintf(out, "... repeated call to AlazarCreateStreamFile()\n");
-		} else {
-			fprintf(out, "RETURN_CODE AlazarCreateStreamFile()\n");
-			fprintf(out, "\tHANDLE handle: %p\n", handle);
-			fprintf(out, "\tconst char * filePath: %p\n", filePath);
-		}
-		fclose(out);
-	}
-	RETURN_CODE  result = api_functions.AlazarCreateStreamFile(handle, filePath);
-	if (api_functions.show_AlazarCreateStreamFile && repeat_count<MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2971,7 +2836,7 @@ RETURN_CODE AlazarResetTimeStamp(HANDLE handle, U32 option)
 	RETURN_CODE  result = api_functions.AlazarResetTimeStamp(handle, option);
 	if (api_functions.show_AlazarResetTimeStamp && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -2997,7 +2862,7 @@ RETURN_CODE AlazarReadRegister(HANDLE handle, U32 offset, U32 *retVal, U32 pswrd
 	RETURN_CODE  result = api_functions.AlazarReadRegister(handle, offset, retVal, pswrd);
 	if (api_functions.show_AlazarReadRegister && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3023,107 +2888,7 @@ RETURN_CODE AlazarWriteRegister(HANDLE handle, U32 offset, U32 Val,U32 pswrd)
 	RETURN_CODE  result = api_functions.AlazarWriteRegister(handle, offset, Val, pswrd);
 	if (api_functions.show_AlazarWriteRegister && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
-		fclose(out);
-	}
-	return result;
-}
-RETURN_CODE ReadC(HANDLE handle, U8 *DmaBuffer, U32 SizeToRead, U32 LocalAddress)
-{
-	if (last_func!=82) repeat_count=0;
-
-	last_func = 82; repeat_count++;
-	if (api_functions.show_ReadC && repeat_count<=MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		if (repeat_count == MAX_REPEAT) {
-			fprintf(out, "... repeated call to ReadC()\n");
-		} else {
-			fprintf(out, "RETURN_CODE ReadC()\n");
-			fprintf(out, "\tHANDLE handle: %p\n", handle);
-			fprintf(out, "\tU8 * DmaBuffer: %p\n", DmaBuffer);
-			fprintf(out, "\tU32 SizeToRead: %d (0x%08x)\n", SizeToRead, SizeToRead);
-			fprintf(out, "\tU32 LocalAddress: %d (0x%08x)\n", LocalAddress, LocalAddress);
-		}
-		fclose(out);
-	}
-	RETURN_CODE  result = api_functions.ReadC(handle, DmaBuffer, SizeToRead, LocalAddress);
-	if (api_functions.show_ReadC && repeat_count<MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
-		fclose(out);
-	}
-	return result;
-}
-void WriteC(HANDLE handle, U8 *DmaBuffer, U32 SizeToRead, U32 LocalAddress)
-{
-	if (last_func!=83) repeat_count=0;
-
-	last_func = 83; repeat_count++;
-	if (api_functions.show_WriteC && repeat_count<=MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		if (repeat_count == MAX_REPEAT) {
-			fprintf(out, "... repeated call to WriteC()\n");
-		} else {
-			fprintf(out, "void WriteC()\n");
-			fprintf(out, "\tHANDLE handle: %p\n", handle);
-			fprintf(out, "\tU8 * DmaBuffer: %p\n", DmaBuffer);
-			fprintf(out, "\tU32 SizeToRead: %d (0x%08x)\n", SizeToRead, SizeToRead);
-			fprintf(out, "\tU32 LocalAddress: %d (0x%08x)\n", LocalAddress, LocalAddress);
-		}
-		fclose(out);
-	}
-	api_functions.WriteC(handle, DmaBuffer, SizeToRead, LocalAddress);
-}
-RETURN_CODE AlazarGetTriggerAddressA(HANDLE handle, U32 Record, U32 *TriggerAddress, U32 *TimeStampHighPart, U32 *TimeStampLowPart)
-{
-	if (last_func!=84) repeat_count=0;
-
-	last_func = 84; repeat_count++;
-	if (api_functions.show_AlazarGetTriggerAddressA && repeat_count<=MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		if (repeat_count == MAX_REPEAT) {
-			fprintf(out, "... repeated call to AlazarGetTriggerAddressA()\n");
-		} else {
-			fprintf(out, "RETURN_CODE AlazarGetTriggerAddressA()\n");
-			fprintf(out, "\tHANDLE handle: %p\n", handle);
-			fprintf(out, "\tU32 Record: %d (0x%08x)\n", Record, Record);
-			fprintf(out, "\tU32 * TriggerAddress: %p\n", TriggerAddress);
-			fprintf(out, "\tU32 * TimeStampHighPart: %p\n", TimeStampHighPart);
-			fprintf(out, "\tU32 * TimeStampLowPart: %p\n", TimeStampLowPart);
-		}
-		fclose(out);
-	}
-	RETURN_CODE  result = api_functions.AlazarGetTriggerAddressA(handle, Record, TriggerAddress, TimeStampHighPart, TimeStampLowPart);
-	if (api_functions.show_AlazarGetTriggerAddressA && repeat_count<MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
-		fclose(out);
-	}
-	return result;
-}
-RETURN_CODE AlazarGetTriggerAddressB(HANDLE handle, U32 Record, U32 *TriggerAddress, U32 *TimeStampHighPart, U32 *TimeStampLowPart)
-{
-	if (last_func!=85) repeat_count=0;
-
-	last_func = 85; repeat_count++;
-	if (api_functions.show_AlazarGetTriggerAddressB && repeat_count<=MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		if (repeat_count == MAX_REPEAT) {
-			fprintf(out, "... repeated call to AlazarGetTriggerAddressB()\n");
-		} else {
-			fprintf(out, "RETURN_CODE AlazarGetTriggerAddressB()\n");
-			fprintf(out, "\tHANDLE handle: %p\n", handle);
-			fprintf(out, "\tU32 Record: %d (0x%08x)\n", Record, Record);
-			fprintf(out, "\tU32 * TriggerAddress: %p\n", TriggerAddress);
-			fprintf(out, "\tU32 * TimeStampHighPart: %p\n", TimeStampHighPart);
-			fprintf(out, "\tU32 * TimeStampLowPart: %p\n", TimeStampLowPart);
-		}
-		fclose(out);
-	}
-	RETURN_CODE  result = api_functions.AlazarGetTriggerAddressB(handle, Record, TriggerAddress, TimeStampHighPart, TimeStampLowPart);
-	if (api_functions.show_AlazarGetTriggerAddressB && repeat_count<MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3148,7 +2913,7 @@ RETURN_CODE ATS9462FlashSectorPageRead(HANDLE handle, U32 address, U16 *PageBuff
 	RETURN_CODE  result = api_functions.ATS9462FlashSectorPageRead(handle, address, PageBuff);
 	if (api_functions.show_ATS9462FlashSectorPageRead && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3173,7 +2938,7 @@ RETURN_CODE ATS9462PageWriteToFlash(HANDLE handle, U32 address, U16 *PageBuff)
 	RETURN_CODE  result = api_functions.ATS9462PageWriteToFlash(handle, address, PageBuff);
 	if (api_functions.show_ATS9462PageWriteToFlash && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3197,7 +2962,7 @@ RETURN_CODE ATS9462FlashSectorErase(HANDLE handle, int sectorNum)
 	RETURN_CODE  result = api_functions.ATS9462FlashSectorErase(handle, sectorNum);
 	if (api_functions.show_ATS9462FlashSectorErase && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3220,7 +2985,7 @@ RETURN_CODE ATS9462FlashChipErase(HANDLE h)
 	RETURN_CODE  result = api_functions.ATS9462FlashChipErase(h);
 	if (api_functions.show_ATS9462FlashChipErase && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3244,7 +3009,7 @@ RETURN_CODE SetControlCommand(HANDLE handle, int cmd)
 	RETURN_CODE  result = api_functions.SetControlCommand(handle, cmd);
 	if (api_functions.show_SetControlCommand && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3277,7 +3042,7 @@ RETURN_CODE AlazarDACSetting(HANDLE handle, U32 SetGet, U32 OriginalOrModified, 
 	RETURN_CODE  result = api_functions.AlazarDACSetting(handle, SetGet, OriginalOrModified, Channel, DACNAME, Coupling, InputRange, Impedance, getVal, setVal, error);
 	if (api_functions.show_AlazarDACSetting && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3308,7 +3073,7 @@ RETURN_CODE AlazarWrite(HANDLE handle, void *buffer, long bufLen, int DmaChannel
 	RETURN_CODE  result = api_functions.AlazarWrite(handle, buffer, bufLen, DmaChannel, firstPoint, startAddress, endAddress, waitTillEnd, error);
 	if (api_functions.show_AlazarWrite && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3333,30 +3098,7 @@ RETURN_CODE AlazarConfigureAuxIO(HANDLE handle, U32 mode, U32 parameter)
 	RETURN_CODE  result = api_functions.AlazarConfigureAuxIO(handle, mode, parameter);
 	if (api_functions.show_AlazarConfigureAuxIO && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
-		fclose(out);
-	}
-	return result;
-}
-const char  *AlazarErrorToText(RETURN_CODE retCode)
-{
-	if (last_func!=94) repeat_count=0;
-
-	last_func = 94; repeat_count++;
-	if (api_functions.show_AlazarErrorToText && repeat_count<=MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		if (repeat_count == MAX_REPEAT) {
-			fprintf(out, "... repeated call to AlazarErrorToText()\n");
-		} else {
-			fprintf(out, "const char AlazarErrorToText()\n");
-			fprintf(out, "\tRETURN_CODE retCode: %d (0x%08x)\n", retCode, retCode);
-		}
-		fclose(out);
-	}
-	const char  * result = api_functions.AlazarErrorToText(retCode);
-	if (api_functions.show_AlazarErrorToText && repeat_count<MAX_REPEAT) {
-		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", result);
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3382,7 +3124,7 @@ RETURN_CODE AlazarConfigureSampleSkipping(HANDLE handle, U32 mode, U32 sampleClo
 	RETURN_CODE  result = api_functions.AlazarConfigureSampleSkipping(handle, mode, sampleClocksPerRecord, sampleSkipBitmap);
 	if (api_functions.show_AlazarConfigureSampleSkipping && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3407,7 +3149,7 @@ RETURN_CODE AlazarCoprocessorRegisterRead(HANDLE handle, U32 offset, U32 *value)
 	RETURN_CODE  result = api_functions.AlazarCoprocessorRegisterRead(handle, offset, value);
 	if (api_functions.show_AlazarCoprocessorRegisterRead && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3432,7 +3174,7 @@ RETURN_CODE AlazarCoprocessorRegisterWrite(HANDLE handle, U32 offset, U32 value)
 	RETURN_CODE  result = api_functions.AlazarCoprocessorRegisterWrite(handle, offset, value);
 	if (api_functions.show_AlazarCoprocessorRegisterWrite && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3457,7 +3199,7 @@ RETURN_CODE AlazarCoprocessorDownloadA(HANDLE handle, char *fileName, U32 option
 	RETURN_CODE  result = api_functions.AlazarCoprocessorDownloadA(handle, fileName, options);
 	if (api_functions.show_AlazarCoprocessorDownloadA && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3483,7 +3225,7 @@ RETURN_CODE AlazarCoprocessorDownloadBuffer(HANDLE handle, U8 *pbBuffer, U32 uBy
 	RETURN_CODE  result = api_functions.AlazarCoprocessorDownloadBuffer(handle, pbBuffer, uBytesToWrite, options);
 	if (api_functions.show_AlazarCoprocessorDownloadBuffer && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3510,7 +3252,7 @@ RETURN_CODE AlazarConfigureRecordAverage(HANDLE handle, U32 mode, U32 samplesPer
 	RETURN_CODE  result = api_functions.AlazarConfigureRecordAverage(handle, mode, samplesPerRecord, recordsPerAverage, options);
 	if (api_functions.show_AlazarConfigureRecordAverage && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3558,7 +3300,7 @@ RETURN_CODE AlazarFreeBufferU8(HANDLE handle, U8 *buffer)
 	RETURN_CODE  result = api_functions.AlazarFreeBufferU8(handle, buffer);
 	if (api_functions.show_AlazarFreeBufferU8 && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3606,7 +3348,7 @@ RETURN_CODE AlazarFreeBufferU16(HANDLE handle, U16 *buffer)
 	RETURN_CODE  result = api_functions.AlazarFreeBufferU16(handle, buffer);
 	if (api_functions.show_AlazarFreeBufferU16 && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3654,7 +3396,7 @@ RETURN_CODE AlazarFreeBufferU8Ex(HANDLE handle, U8 *buffer)
 	RETURN_CODE  result = api_functions.AlazarFreeBufferU8Ex(handle, buffer);
 	if (api_functions.show_AlazarFreeBufferU8Ex && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3702,7 +3444,7 @@ RETURN_CODE AlazarFreeBufferU16Ex(HANDLE handle, U16 *buffer)
 	RETURN_CODE  result = api_functions.AlazarFreeBufferU16Ex(handle, buffer);
 	if (api_functions.show_AlazarFreeBufferU16Ex && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3727,7 +3469,7 @@ RETURN_CODE AlazarConfigureLSB(HANDLE handle, U32 valueLsb0, U32 valueLsb1)
 	RETURN_CODE  result = api_functions.AlazarConfigureLSB(handle, valueLsb0, valueLsb1);
 	if (api_functions.show_AlazarConfigureLSB && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3754,7 +3496,7 @@ RETURN_CODE AlazarExtractFFTNPTFooters(void *buffer, U32 recordSize_bytes, U32 b
 	RETURN_CODE  result = api_functions.AlazarExtractFFTNPTFooters(buffer, recordSize_bytes, bufferSize_bytes, footersArray, numFootersToExtract);
 	if (api_functions.show_AlazarExtractFFTNPTFooters && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3781,7 +3523,7 @@ RETURN_CODE AlazarExtractTimeDomainNPTFooters(void *buffer, U32 recordSize_bytes
 	RETURN_CODE  result = api_functions.AlazarExtractTimeDomainNPTFooters(buffer, recordSize_bytes, bufferSize_bytes, footersArray, numFootersToExtract);
 	if (api_functions.show_AlazarExtractTimeDomainNPTFooters && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3808,7 +3550,7 @@ RETURN_CODE AlazarExtractNPTFooters(void *buffer, U32 recordSize_bytes, U32 buff
 	RETURN_CODE  result = api_functions.AlazarExtractNPTFooters(buffer, recordSize_bytes, bufferSize_bytes, footersArray, numFootersToExtract);
 	if (api_functions.show_AlazarExtractNPTFooters && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3831,7 +3573,7 @@ RETURN_CODE AlazarDisableDSP(HANDLE boardHandle)
 	RETURN_CODE  result = api_functions.AlazarDisableDSP(boardHandle);
 	if (api_functions.show_AlazarDisableDSP && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3859,7 +3601,7 @@ RETURN_CODE AlazarOCTIgnoreBadClock(HANDLE handle, U32 enable, double goodClockD
 	RETURN_CODE  result = api_functions.AlazarOCTIgnoreBadClock(handle, enable, goodClockDuration_seconds, badClockDuration_seconds, triggerCycleTime_seconds, triggerPulseWidth_seconds);
 	if (api_functions.show_AlazarOCTIgnoreBadClock && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3883,7 +3625,7 @@ RETURN_CODE AlazarSetADCBackgroundCompensation(HANDLE handle, BOOL active)
 	RETURN_CODE  result = api_functions.AlazarSetADCBackgroundCompensation(handle, active);
 	if (api_functions.show_AlazarSetADCBackgroundCompensation && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3909,7 +3651,7 @@ RETURN_CODE AlazarDSPGetModules(HANDLE boardHandle, U32 numEntries, dsp_module_h
 	RETURN_CODE  result = api_functions.AlazarDSPGetModules(boardHandle, numEntries, modules, numModules);
 	if (api_functions.show_AlazarDSPGetModules && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3938,7 +3680,7 @@ RETURN_CODE AlazarDSPGetInfo(dsp_module_handle dspHandle, U32 *dspModuleId, U16 
 	RETURN_CODE  result = api_functions.AlazarDSPGetInfo(dspHandle, dspModuleId, versionMajor, versionMinor, maxLength, reserved0, reserved1);
 	if (api_functions.show_AlazarDSPGetInfo && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3964,7 +3706,7 @@ RETURN_CODE AlazarDSPGenerateWindowFunction(U32 windowType, float *window, U32 w
 	RETURN_CODE  result = api_functions.AlazarDSPGenerateWindowFunction(windowType, window, windowLength_samples, paddingLength_samples);
 	if (api_functions.show_AlazarDSPGenerateWindowFunction && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -3989,7 +3731,7 @@ RETURN_CODE AlazarFFTGetMaxTriggerRepeatRate(dsp_module_handle dspHandle, U32 ff
 	RETURN_CODE  result = api_functions.AlazarFFTGetMaxTriggerRepeatRate(dspHandle, fftSize, maxTriggerRepeatRate);
 	if (api_functions.show_AlazarFFTGetMaxTriggerRepeatRate && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4014,7 +3756,7 @@ RETURN_CODE AlazarFFTBackgroundSubtractionSetRecordS16(dsp_module_handle dspHand
 	RETURN_CODE  result = api_functions.AlazarFFTBackgroundSubtractionSetRecordS16(dspHandle, record, size_samples);
 	if (api_functions.show_AlazarFFTBackgroundSubtractionSetRecordS16 && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4039,7 +3781,7 @@ RETURN_CODE AlazarFFTBackgroundSubtractionGetRecordS16(dsp_module_handle dspHand
 	RETURN_CODE  result = api_functions.AlazarFFTBackgroundSubtractionGetRecordS16(dspHandle, backgroundRecord, size_samples);
 	if (api_functions.show_AlazarFFTBackgroundSubtractionGetRecordS16 && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4063,7 +3805,7 @@ RETURN_CODE AlazarFFTBackgroundSubtractionSetEnabled(dsp_module_handle dspHandle
 	RETURN_CODE  result = api_functions.AlazarFFTBackgroundSubtractionSetEnabled(dspHandle, enabled);
 	if (api_functions.show_AlazarFFTBackgroundSubtractionSetEnabled && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4089,7 +3831,7 @@ RETURN_CODE AlazarFFTSetWindowFunction(dsp_module_handle dspHandle, U32 samplesP
 	RETURN_CODE  result = api_functions.AlazarFFTSetWindowFunction(dspHandle, samplesPerRecord, realWindowArray, imagWindowArray);
 	if (api_functions.show_AlazarFFTSetWindowFunction && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4115,7 +3857,7 @@ RETURN_CODE AlazarFFTGetWindowFunction(dsp_module_handle dspHandle, U32 samplesP
 	RETURN_CODE  result = api_functions.AlazarFFTGetWindowFunction(dspHandle, samplesPerRecord, realWindowArray, imagWindowArray);
 	if (api_functions.show_AlazarFFTGetWindowFunction && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4142,7 +3884,7 @@ RETURN_CODE AlazarFFTVerificationMode(dsp_module_handle dspHandle, BOOL enable, 
 	RETURN_CODE  result = api_functions.AlazarFFTVerificationMode(dspHandle, enable, realArray, imagArray, recordLength_samples);
 	if (api_functions.show_AlazarFFTVerificationMode && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4172,7 +3914,7 @@ RETURN_CODE AlazarFFTSetup(dsp_module_handle dspHandle, U16 inputChannelMask, U3
 	RETURN_CODE  result = api_functions.AlazarFFTSetup(dspHandle, inputChannelMask, recordLength_samples, fftLength_samples, outputFormat, footer, reserved, bytesPerOutputRecord);
 	if (api_functions.show_AlazarFFTSetup && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4197,7 +3939,7 @@ RETURN_CODE AlazarFFTSetScalingAndSlicing(dsp_module_handle dspHandle, U8 slice_
 	RETURN_CODE  result = api_functions.AlazarFFTSetScalingAndSlicing(dspHandle, slice_pos, loge_ampl_mult);
 	if (api_functions.show_AlazarFFTSetScalingAndSlicing && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4222,7 +3964,7 @@ RETURN_CODE AlazarDSPGetBuffer(HANDLE boardHandle, void *buffer, U32 timeout_ms)
 	RETURN_CODE  result = api_functions.AlazarDSPGetBuffer(boardHandle, buffer, timeout_ms);
 	if (api_functions.show_AlazarDSPGetBuffer && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4248,7 +3990,7 @@ RETURN_CODE AlazarDSPGetNextBuffer(HANDLE boardHandle, void *buffer, U32 bytesTo
 	RETURN_CODE  result = api_functions.AlazarDSPGetNextBuffer(boardHandle, buffer, bytesToCopy, timeout_ms);
 	if (api_functions.show_AlazarDSPGetNextBuffer && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4273,7 +4015,7 @@ RETURN_CODE AlazarDSPGetParameterU32(dsp_module_handle dspHandle, U32 parameter,
 	RETURN_CODE  result = api_functions.AlazarDSPGetParameterU32(dspHandle, parameter, _result);
 	if (api_functions.show_AlazarDSPGetParameterU32 && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4298,7 +4040,7 @@ RETURN_CODE AlazarDSPSetParameterU32(dsp_module_handle dspHandle, U32 parameter,
 	RETURN_CODE  result = api_functions.AlazarDSPSetParameterU32(dspHandle, parameter, value);
 	if (api_functions.show_AlazarDSPSetParameterU32 && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4323,7 +4065,7 @@ RETURN_CODE AlazarDSPGetParameterS32(dsp_module_handle dspHandle, U32 parameter,
 	RETURN_CODE  result = api_functions.AlazarDSPGetParameterS32(dspHandle, parameter, _result);
 	if (api_functions.show_AlazarDSPGetParameterS32 && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4348,7 +4090,7 @@ RETURN_CODE AlazarDSPSetParameterS32(dsp_module_handle dspHandle, U32 parameter,
 	RETURN_CODE  result = api_functions.AlazarDSPSetParameterS32(dspHandle, parameter, value);
 	if (api_functions.show_AlazarDSPSetParameterS32 && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4373,7 +4115,7 @@ RETURN_CODE AlazarDSPGetParameterFloat(dsp_module_handle dspHandle, U32 paramete
 	RETURN_CODE  result = api_functions.AlazarDSPGetParameterFloat(dspHandle, parameter, _result);
 	if (api_functions.show_AlazarDSPGetParameterFloat && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4398,7 +4140,7 @@ RETURN_CODE AlazarDSPSetParameterFloat(dsp_module_handle dspHandle, U32 paramete
 	RETURN_CODE  result = api_functions.AlazarDSPSetParameterFloat(dspHandle, parameter, value);
 	if (api_functions.show_AlazarDSPSetParameterFloat && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4423,7 +4165,7 @@ RETURN_CODE AlazarDSPConfigureSelfTrigger(dsp_module_handle dspHandle, BOOL enab
 	RETURN_CODE  result = api_functions.AlazarDSPConfigureSelfTrigger(dspHandle, enable, counter);
 	if (api_functions.show_AlazarDSPConfigureSelfTrigger && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4449,7 +4191,7 @@ RETURN_CODE AlazarDSPConfigureSampleSkipping(dsp_module_handle dspHandle, BOOL i
 	RETURN_CODE  result = api_functions.AlazarDSPConfigureSampleSkipping(dspHandle, independentMode, count, vector);
 	if (api_functions.show_AlazarDSPConfigureSampleSkipping && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;
@@ -4472,7 +4214,7 @@ RETURN_CODE AlazarDSPAbortCapture(HANDLE boardHandle)
 	RETURN_CODE  result = api_functions.AlazarDSPAbortCapture(boardHandle);
 	if (api_functions.show_AlazarDSPAbortCapture && repeat_count<MAX_REPEAT) {
 		FILE *out = fopen(LOGFILE, "a");
-		fprintf(out, "\t=> %s\n", api_functions.AlazarErrorToText(result));
+		fprintf(out, "\t=> %s\n", AlazarErrorToText(result));
 		fclose(out);
 	}
 	return result;

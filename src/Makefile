@@ -32,8 +32,8 @@ ats-capture: ats-capture.o ATS-SDK.o
 ls-ats.o: ls-ats.cpp ATS-SDK.h
 	c++ $(CXXOPT) -c ls-ats.cpp
 
-ATS-spy.so:
-	gcc -o ATS-spy.so ATS-spy.c -shared -fPIC
+ATS-spy.so: ATS-spy.c
+	gcc -o ATS-spy.so -g ATS-spy.c -shared -fPIC -DPIC -ldl
 
 ATS-SDK.o: ATS-SDK.cpp ATS-SDK.h
 	c++ $(CXXOPT) -c ATS-SDK.cpp
