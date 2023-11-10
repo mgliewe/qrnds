@@ -105,7 +105,9 @@ function do_stage()
 				for i, name in ipairs(parm_name) do
 					local type = trim(parm_type[i])
 
-					if type=='HANDLE' or type:sub(-1)=='*' then
+					if type=='char *' or type=='const char *' then
+						print("\t\t\tfprintf(stderr, \"\\t" .. type .. " " .. name .. ": %s\\n\", " .. name ..");")
+					elseif type=='HANDLE' or type:sub(-1)=='*' then
 						print("\t\t\tfprintf(stderr, \"\\t" .. type .. " " .. name .. ": %p\\n\", " .. name ..");")
 					elseif type=='dsp_module_handle' then
 						print("\t\t\tfprintf(stderr, \"\\t" .. type .. " "  .. name .. ": %p\\n\", " .. name ..");")
@@ -168,6 +170,12 @@ function do_stage()
 					else
 						print("#error unknown result type [" .. return_type .. ptr .. ']')
 					end
+
+					if func_name=='AlazarGetChannelInfo' then
+						print([[
+							fprintf(stderr, "\t    memorySize: %d\n", memorySize);
+							fprintf(stderr, "\t    bitsPerSample: %d\n", bitsPerSample);
+						]]);
 
 					print("\t}")
 					print("\treturn result;")
