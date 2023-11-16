@@ -210,20 +210,19 @@ void show_size(std::ostream &out, int sz) {
     }
 }
 
-std::string size_str(int size, int base=1024) {
-    float sz = size;
-    if (sz<base) {
+std::string size_str(unsigned long sz, int base=1024) {
+    if (sz<base || sz%base!=0) {
         return std::to_string(sz);
     } else {
         sz /= base;
-        if (sz<base) {
+        if (sz<base  || sz%base!=0) {
             return std::to_string(sz) + "k";
         } else {
             sz /= base;
-            if (sz<base) {
+            if (sz<base  || sz%base!=0) {
                 return std::to_string(sz) + "M";
             } else {
-                sz /= 1024;
+                sz /= base;
                 return std::to_string(sz) + "G";
             }
         }
@@ -371,26 +370,57 @@ void process_option(int short_option, const char *optarg) {
             ATS::Board * board;
             try {
                 board = new ATS::Board(system_id, board_id);
-                cout << "List of sample rates (** mark supported rates for board [" 
-                     << system_id << ":" << board_id <<"]:" << endl;
             } catch(...) {
-                cout << "List of known sample rates:" << endl;
+                cout << "FATAL: no Alazar digitizer found." << endl;
+                exit(1);
             }
+            cout << "List of sample rates for board " << board->board_name() << " at [" 
+                 << system_id << ":" << board_id <<"]:" << endl;
             const struct ATS::sample_rates *rates = ATS::sample_rates;
             while (rates->rate) {
-                cout << "  " << rates->rate;
-                if (board) {
-                    try {
-                        board->set_capture_clock(INTERNAL_CLOCK, ATS::to_samplerate_code(rates->rate), CLOCK_EDGE_FALLING, 0);
-                        cout << " **";
-                    } catch(std::exception &e) {
-                        cout << " " << e.what();
-                    }
+                try {
+                    board->set_capture_clock(INTERNAL_CLOCK, ATS::to_samplerate_code(rates->rate), CLOCK_EDGE_FALLING, 0);
+                    cout << "  " << size_str(rates->rate, 1000) << "S/sec" << endl; 
+                } catch(std::exception &e) {
                 }
-                cout << endl;
+                rates++;
             }
             if (board) delete board;
             exit(1);
+            break;
+        }
+
+        case OPT_LIST_RANGES: {
+            ATS::Board * board;
+            try {
+                board = new ATS::Board(system_id, board_id);
+            } catch(...) {
+                cout << "FATAL: no Alazar digitizer found." << endl;
+                exit(1);
+            }
+            cout << "List of input ranges for board " << board->board_name() << " at [" 
+                 << system_id << ":" << board_id <<"]:" << endl;
+            const struct ATS::input_ranges *ranges = ATS::input_ranges;
+            while(ranges->code) {
+                try {
+                    board->input_control(CHANNEL_A, DC_COUPLING, ranges->code, IMPEDANCE_50_OHM);
+                    if (ranges->q>0)
+                        cerr << "+"; 
+                    else if (ranges->q<0) 
+                        cerr << "-";
+                    if (ranges->mv % 1000 == 0) {
+                        cerr << (ranges->mv/1000) << "V" << endl;
+                    } else {
+                        cerr << (ranges->mv) << "mV" << endl;
+                    }
+                } catch (...) {
+
+                }
+                ranges++;
+            }
+            if (board) delete board;
+            exit(1);
+            break;
         }
 
         default: {

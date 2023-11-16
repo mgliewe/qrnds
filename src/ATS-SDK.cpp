@@ -44,7 +44,7 @@ int num_boards(int system_id) {
     return AlazarBoardsInSystemBySystemID(system_id);
 }
 
-# define KS 10000L
+# define KS 1000L
 # define MS KS*KS
 
 const struct sample_rates sample_rates[] = {
