@@ -7,91 +7,26 @@
 #include <sys/mman.h>
 
 
-using std::cout, std::cerr, std::endl;
+#include "ATS-SDK.h"
+
+using std::cout;
+using std::cerr;
+using std::endl;
 
 
-struct option long_options[] = {
-    { "help",           no_argument,        0, 'h' },
-    { "output",         required_argument,  0, 'o' },
-    { "input",          required_argument,  0, 'f' },
 
-    { "device",         required_argument,  0, 'd' },
-    { "channel",        required_argument,  0, 'c' },
-    { "two-channel",    no_argument,        0, '2' },
-    { "eight-bit",      no_argument,        0, '8' },
-    { "pack",           no_argument,        0, 'p' },
-    { "in-memory",      no_argument,        0, 'm' },
-    { "test",           no_argument,        0, 't' },
-    { "record-size",    required_argument,  0, 'r' },
-    { "record-count",   required_argument,  0, 'n' },
-    { "strategy",       required_argument,  0, 's' },
+const char *progname;
+int verbose = 3;
 
-    { "pyxplot",        optional_argument,  0, 'F' },
-    { "pyxplot-script", optional_argument,  0, 'S' },
-
-    { NULL, 0, 0, 0 }
-
-};
-
-const char *short_options = "hvo:2c:8pmtr:n:s:f:F::S::";
-
-void help(const char *cmd)  {
-    cerr << "usage: " << cmd << " <options>" << endl
-         << endl
-
-         << "options:" << endl
-         << "\t--help, -h                show this help" << endl
-         << "\t--verbose, -v             verbose output" << endl 
-         << "\t--output <file>, -o       write data to <file>, use '-' for stdout" << endl
-
-         << "\t input=<file>, -f         read from file instead of capturing" << endl
-
-         << "\t--device <dev>, -d        device to capture from. Default: 0:0" << endl
-         << "\t--channel <c>, -c         channel, default: channel 'B'" << endl
-         << "\t--two-channel, -2         aquire channel A and B, store interleaved data" << endl
-         << "\t--eight-bit, -8           capture 8 bit per sample" << endl
-         << "\t--pack, -p                enable 12-bit packing in output" << endl
-         << "\t--in-memory, -m           capture to memory before writing to disk" << endl
-         << "\t--test, -t                just read data, dont write to disk" << endl
-         << "\t--record-size <n>, -r     record size, default: 1024 samples" << endl
-         << "\t--record-count <n>, -n    record count, use 0 for unlimited. Default: 0" << endl
-         << "\t--strategy <n>, -s        aquisition strategy. Use one of:" << endl
-         << "\t                              P - use polling" << endl
-         << "\t                              D - traditional DMA" << endl
-         << "\t                              A - asynchronious DMA (default)" << endl
-         << "\t                              S - asynchronious DMA streaming" << endl
-
-         << "\t--pyxplot [<file>], -F    generate data file suitable for pyxplot, append .dat if appropriate " << endl
-         << "\t--pyxplot-script, -S      generate pyxplot script file" << endl
-         << endl
-
-         << "Examples:" <<  endl
-         << "\t# read 1G samples to binary file:" << endl
-         << "\t]t" << cmd << " -r 1k -n 1M -o output.bin" << endl
-         << "\t# continously streaming to a pipe" << endl
-         << "\t\t" << cmd << " -r 64k -n 0 -o -" << endl
-         << "\t# benchmarking thruput of 1Gsamples" << endl
-         << "\t\ttime " << cmd << "-v -r 1k -n 1M -m" << endl
-         << "\t# show 1Msamples in pyxplot" << endl
-         << "\t\t" << cmd << " -r 1k -n 1k -F out.dat -S; pyplot out.pyxplot"
-    ;
-}
-
-void usage(const char *cmd)  {
-    cerr << cmd << ": aquire data from Alazartech digitizer board. Use --help for help" << endl;
-}
-
-
-enum strategy {
-    polling = 0, traditional_dma=1, async_dma=2, streaming_dma=3
-} strategy = async_dma;
-
-int verbose = 0;
 char *infile = NULL;
 char *outfile = NULL;
-int system_id = 0;
-int board_id = 0;
+
+int system_id = 1;
+int board_id = 1;
 int channel = 2;
+long samplerate = 3800L * 1000 * 1000;
+int input_range = 1250;
+int input_quadrant = 0;
 bool eigth_bit = false;
 bool pack_12_bit = false;
 bool in_memory = false;
@@ -100,29 +35,160 @@ unsigned record_size = 1024;
 unsigned record_count = 1024;
 char *pyxdatfile = NULL;
 char *pyxscriptfile = NULL;
+bool start_pyxplot = false;
 
-bool init_hardware();
-uint8_t * read_buffer(uint8_t *buffer);
-bool release_hardware();
+ATS::Board *board = 0;
+unsigned int transfer_length;
+
+/** a ring-list of buffers */
+void init_buffer_list(int count);
+void push_buffer(uint8_t *buffer);
+uint8_t *pop_buffer();
 
 
-int to_number(const char *str) {
+const char *short_options = "hvd:o:2c:8pmtr:n:s:f:F::S::";
+
+enum options {
+    OPT_NULL = 0,
+    OPT_HELP,
+    OPT_VERBOSE,
+    OPT_OUTPUT,
+    OPT_INPUT,
+    OPT_IN_MEMORY,
+    OPT_TEST,
+    OPT_RECORD_SIZE,
+    OPT_RECORD_COUNT,
+    OPT_DEVICE,
+    OPT_CHANNEL,
+    OPT_TWO_CHANNEL,
+    OPT_SAMPLERATE,
+    OPT_INPUT_RANGE,
+    OPT_EIGHT_BIT,
+    OPT_PACK,
+    OPT_PYXPLOT,
+    OPT_PYXPLOT_SCRIPT,
+    OPT_PYXPLOT_START,
+    OPT_LIST_RATES,
+    OPT_LIST_RANGES,
+    OPT_LAST
+};
+
+struct option long_options[] = {
+    { "help",           no_argument,        0, OPT_HELP },
+    { "verbose",        optional_argument,  0, OPT_VERBOSE },
+    { "list-rates",     no_argument,        0, OPT_LIST_RATES },
+    { "list-ranges",    no_argument,        0, OPT_LIST_RANGES },
+
+    { "output",         required_argument,  0, OPT_OUTPUT },
+    { "input",          required_argument,  0, OPT_INPUT },
+
+    { "in-memory",      no_argument,        0, OPT_IN_MEMORY },
+    { "test",           no_argument,        0, OPT_TEST },
+    { "record-size",    required_argument,  0, OPT_RECORD_SIZE },
+    { "record-count",   required_argument,  0, OPT_RECORD_COUNT },
+    { "device",         required_argument,  0, OPT_DEVICE },
+    { "channel",        required_argument,  0, OPT_CHANNEL },
+    { "two-channel",    no_argument,        0, OPT_CHANNEL },
+    { "samplerate",     required_argument,  0, OPT_SAMPLERATE},
+    { "input-range",    required_argument,  0, OPT_INPUT_RANGE},
+
+    { "eight-bit",      no_argument,        0, OPT_EIGHT_BIT },
+    { "pack",           no_argument,        0, OPT_PACK },
+
+    { "pyxplot",        optional_argument,  0, OPT_PYXPLOT },
+    { "pyxplot-script", optional_argument,  0, OPT_PYXPLOT_SCRIPT },
+    { "pyxplot-start",  no_argument,        0, OPT_PYXPLOT_START },
+
+    { NULL, 0, 0, 0 }
+
+};
+
+
+void help()  {
+    cerr << "usage: " << progname << " <options>" << endl
+         << endl
+
+         << "options:" << endl
+         << "\t--help, -h                show this help" << endl
+         << "\t--verbose, -v             verbose output" << endl 
+
+         << "\t--output <file>, -o       write data to <file>, use '-' for stdout" << endl
+         << "\t input=<file>, -f         read from file instead of capturing" << endl
+
+         << "\t--device <dev>, -d        device to capture from. Default: 1:1" << endl
+         << "\t--channel <c>, -c         channel, default: channel 'B'" << endl
+         << "\t--rate <r>, -r            sample rate, default 3.8G" << endl
+         << "\t--two-channel, -2         aquire channel A and B, store interleaved data" << endl
+         << "\t--eight-bit, -8           capture 8 bit per sample" << endl
+         << "\t--pack, -p                enable 12-bit packing in output" << endl
+         << "\t--in-memory, -m           capture to memory before writing to disk" << endl
+         << "\t--test, -t                just read data, dont write to disk" << endl
+         << "\t--record-size <n>, -r     record size, default: 1024 samples" << endl
+         << "\t--record-count <n>, -n    record count, use 0 for unlimited. Default: 0" << endl
+
+         << "\t--list-ranges             " << endl
+         << "\t--list-rates              " << endl
+
+         << "\t--pyxplot [<file>], -F    generate data file suitable for pyxplot, append .dat if appropriate " << endl
+         << "\t--pyxplot-script, -S      generate pyxplot script file" << endl
+         << endl
+
+         << "Examples:" <<  endl
+         << "\t# read 1G samples to binary file:" << endl
+         << "\t]t" << progname << " -r 1k -n 1M -o output.bin" << endl
+         << "\t# continously streaming to a pipe" << endl
+         << "\t\t" << progname << " -r 64k -n 0 -o -" << endl
+         << "\t# benchmarking thruput of 1Gsamples" << endl
+         << "\t\ttime " << progname << "-v -r 1k -n 1M -m" << endl
+         << "\t# show 1Msamples in pyxplot" << endl
+         << "\t\t" << progname << " -r 1k -n 1k -F out.dat -S; pyplot out.pyxplot"
+    ;
+}
+
+void usage()  {
+    cerr << progname << ": aquire data from Alazartech digitizer board. Use --help for help" << endl;
+}
+
+int to_number(const char *str, unsigned base=1024, unsigned int factor = 1) {
     if (!isdigit(*str)) {
-        throw "bad number format";
+        throw std::runtime_error("bad number format");
     }
     char *endptr;
-    long number = strtol(str, &endptr, 0);
+    float number = strtof(str, &endptr) * factor;
     switch(*endptr) {
-        case 'k': case 'K':
-            number *= 1024; break;
-        case 'm': case 'M':
-            number *= 1024*1024; break;
-        case 'g': case 'G':
-            number *= 1024*1024*1024; break;
+        case 'm':
+            number /= base; break;
+        case 'k':
+            number *= base; break;
+        case 'M':
+            number *= base*base; break;
+        case 'G':
+            number *= base*base*base; break;
         default:
-        throw "bad number format";
+            throw std::runtime_error("bad number format");
     }
     return number;
+}
+
+void parse_board_address(const char *addr, int &sys_id, int &board_id) {
+    int sys, board;
+    char *s;
+
+    if (!isdigit(*addr))    
+        throw std::runtime_error("board address");
+
+    sys = strtol(addr, &s, 0);
+    if (*s++!=':') 
+        throw std::runtime_error("board address");
+    if (!isdigit(*s))    
+        throw std::runtime_error("board address");
+
+    board=strtol(s, &s, 0);
+    if (*s)
+        throw std::runtime_error("board address");
+ 
+    sys_id = sys;
+    board_id = board;
 }
 
 void show_size(std::ostream &out, int sz) {
@@ -144,151 +210,288 @@ void show_size(std::ostream &out, int sz) {
     }
 }
 
-
-int main(int argc, char * const argv[]) {
-    int option_index;
-
-    for (;; ){
-
-        int opt = getopt_long(argc, argv, short_options, long_options, &option_index);
-        if (opt==-1)
-            break;
-
-        switch(opt) {
-            case 'h': {
-                help(argv[0]);
-                return 1;
-            }
-
-            case 'v': {
-                verbose ++;
-                break;
-            }
-
-            case 'f': {
-                infile = strdup(optarg);
-                break;
-            }
-
-            case 'd': {
-                // TODO:
-            }
-
-            case 'o': {
-                outfile = strdup(optarg);
-                break;
-            }
-
-            case '2': {
-                channel = 3;
-                break;
-            }
-
-            case 'c': {
-                switch (*optarg) {
-                    case '0': case 'a': case 'A':
-                        channel = 1; break;
-                    case '1': case 'b': case 'B':
-                        channel = 2; break;
-                    default:
-                        usage(argv[0]); return 0;
-                }
-                break;
-            }
-
-            case '8': {
-                eigth_bit = true;
-                break;
-            }
-
-            case 'p': {
-                pack_12_bit = true;
-                break;
-            }
-
-            case 'm': {
-                in_memory = true;
-                break;
-            }
-            
-            case 't': {
-                test_mode = true;
-                break;
-            }
-
-            case 'r': {
-                record_size = to_number(optarg);
-                break;
-            }
-
-            case 'n': {
-                record_count = to_number(optarg);
-                break;
-            }
-
-            case 's': {
-                switch (*optarg) {
-                    case 'p': case 'P': case '0':
-                        strategy = polling; break;
-                    case 'd': case 'D': case '1':
-                        strategy = traditional_dma; break;
-                    case 'a': case 'A': case '2':
-                        strategy = async_dma; break;
-                    case 's': case 'S': case '3':
-                        strategy = streaming_dma; break;
-                    default:
-                        usage(argv[0]); return 0;
-                }
-            }
-
-            case 'F': {
-                if (optarg && *optarg) {
-                    pyxdatfile = strdup(optarg);
-                } else {
-                    if (!outfile) {
-                        cerr << "cannot derive pyxplot filename from output-file" << endl;
-                        return 0;
-                    }
-                    char *p = strrchr(outfile, '.');
-                    if (!p) {
-                        cerr << "cannot derive pyxplot filename from output-file" << endl;
-                        return 0;
-                    }
-                    int len = p - outfile;
-                    pyxdatfile = (char *) malloc(len+4+1);
-                    strncpy(pyxdatfile, outfile, len);
-                    strcat(pyxdatfile, ".dat");
-                }
-                break;
-            }
-
-            case 'S': {
-                if (optarg && *optarg) {
-                    pyxscriptfile = strdup(optarg);
-                } else {
-                    if (!pyxdatfile) {
-                        cerr << "cannot derive pyxplot filename from pyxscript dat-file" << endl;
-                        return 0;
-                    }
-                    char *p = strrchr(pyxdatfile, '.');
-                    if (!p) {
-                        cerr << "cannot derive pyxplot filename from pyxscript dat-file" << endl;
-                        return 0;
-                    }
-                    int len = p - pyxdatfile;
-                    pyxscriptfile = (char *) malloc(len+8+1);
-                    strncpy(pyxscriptfile, pyxdatfile, len);
-                    strcat(pyxscriptfile, ".pyxplot");
-                }
-                break;
-            }
-
-            default: {
-                usage(argv[0]);
-                return 0;
+std::string size_str(int size, int base=1024) {
+    float sz = size;
+    if (sz<base) {
+        return std::to_string(sz);
+    } else {
+        sz /= base;
+        if (sz<base) {
+            return std::to_string(sz) + "k";
+        } else {
+            sz /= base;
+            if (sz<base) {
+                return std::to_string(sz) + "M";
+            } else {
+                sz /= 1024;
+                return std::to_string(sz) + "G";
             }
         }
     }
+}
+
+void process_option(int short_option, const char *optarg) {
+    switch(short_option) {
+        case 'h': 
+        case OPT_HELP: {
+            help();
+            exit(1);
+        }
+
+        case 'v': 
+        case OPT_VERBOSE: {
+            verbose ++;
+            break;
+        }
+
+        case 'f': 
+        case OPT_INPUT: {
+            infile = strdup(optarg);
+            break;
+        }
+
+        case 'd': 
+        case OPT_DEVICE: {
+            parse_board_address(optarg, system_id, board_id);
+            break;
+        }
+
+        case 'o': 
+        case OPT_OUTPUT: {
+            outfile = strdup(optarg);
+            break;
+        }
+
+        case '2': 
+        case OPT_TWO_CHANNEL: {
+            channel = 3;
+            break;
+        }
+
+        case 'c': 
+        case OPT_CHANNEL: {
+            switch (*optarg) {
+                case '0': case 'a': case 'A':
+                    channel = 1; break;
+                case '1': case 'b': case 'B':
+                    channel = 2; break;
+                default:
+                    usage(); 
+                    exit(0);
+            }
+            break;
+        }
+
+        case '8': 
+        case OPT_EIGHT_BIT: {
+            eigth_bit = true;
+            break;
+        }
+
+        case 'p': 
+        case OPT_PACK: {
+            pack_12_bit = true;
+            break;
+        }
+
+        case 'm': 
+        case OPT_IN_MEMORY: {
+            in_memory = true;
+            break;
+        }
+        
+        case 't': 
+        case OPT_TEST: {
+            test_mode = true;
+            break;
+        }
+
+        case 'r': 
+        case OPT_RECORD_SIZE: {
+            record_size = to_number(optarg);
+            break;
+        }
+
+        case 'n': 
+        case OPT_RECORD_COUNT: {
+            record_count = to_number(optarg);
+            break;
+        }
+
+        case 'F': 
+        case OPT_PYXPLOT: {
+            if (optarg && *optarg) {
+                pyxdatfile = strdup(optarg);
+            } else {
+                if (!outfile) {
+                    cerr << "cannot derive pyxplot filename from output-file" << endl;
+                    exit(0);
+                }
+                char *p = strrchr(outfile, '.');
+                if (!p) {
+                    cerr << "cannot derive pyxplot filename from output-file" << endl;
+                    exit(0);
+                }
+                int len = p - outfile;
+                pyxdatfile = (char *) malloc(len+4+1);
+                strncpy(pyxdatfile, outfile, len);
+                strcat(pyxdatfile, ".dat");
+            }
+            break;
+        }
+
+        case 'S': 
+        case OPT_PYXPLOT_SCRIPT: {
+            if (optarg && *optarg) {
+                pyxscriptfile = strdup(optarg);
+            } else {
+                if (!pyxdatfile) {
+                    cerr << "cannot derive pyxplot filename from pyxscript dat-file" << endl;
+                    exit(0);
+                }
+                char *p = strrchr(pyxdatfile, '.');
+                if (!p) {
+                    cerr << "cannot derive pyxplot filename from pyxscript dat-file" << endl;
+                    exit(0);
+                }
+                int len = p - pyxdatfile;
+                pyxscriptfile = (char *) malloc(len+8+1);
+                strncpy(pyxscriptfile, pyxdatfile, len);
+                strcat(pyxscriptfile, ".pyxplot");
+            }
+            break;
+        }
+
+        case 'R': 
+        case OPT_PYXPLOT_START: {
+            start_pyxplot = true;
+        }
+
+        case OPT_LIST_RATES: {
+            ATS::Board * board;
+            try {
+                board = new ATS::Board(system_id, board_id);
+                cout << "List of sample rates (** mark supported rates for board [" 
+                     << system_id << ":" << board_id <<"]:" << endl;
+            } catch(...) {
+                cout << "List of known sample rates:" << endl;
+            }
+            const struct ATS::sample_rates *rates = ATS::sample_rates;
+            while (rates->rate) {
+                cout << "  " << rates->rate;
+                if (board) {
+                    try {
+                        board->set_capture_clock(INTERNAL_CLOCK, ATS::to_samplerate_code(rates->rate), CLOCK_EDGE_FALLING, 0);
+                        cout << " **";
+                    } catch(std::exception &e) {
+                        cout << " " << e.what();
+                    }
+                }
+                cout << endl;
+            }
+            if (board) delete board;
+            exit(1);
+        }
+
+        default: {
+            usage();
+            exit(0);
+        }
+    }
+
+}
+
+
+void read_config(const char *file) {
+    char line[120];
+    FILE *cfg = fopen(file, "r");
+    while (fgets(line, 120, cfg)) {
+        char *p=line;
+
+        // skip blanks
+        while (p && isblank(*p)) 
+            p++;
+
+        // skip comments
+        if (*p=='#')
+            continue;
+
+        // skip empty line
+        if (!*p)
+            continue;
+
+        // read option identifier
+        char *option = p;
+        while (*p && !isblank(*p)) 
+            p++;
+        if (*p) *p++ = 0;
+
+        // skip blanks for arg
+        while (*p && isblank(*p)) 
+            p++;
+
+        // skip comment
+        if (*p == '#') 
+            *p = 0;
+
+        // read optional argument
+        char *arg = p;
+        while (*p && !isblank(*p)) 
+            p++;
+        if (*p) *p++ = 0;
+
+
+        struct option *opts = long_options;
+        while (opts->name) {
+            if (strcmp(option, opts->name)==0) {
+                process_option(opts->val, arg);
+                break;
+            }
+        }
+    }
+}
+
+void write_config(std::ostream &out) {
+    if (outfile)
+        out << "output " << outfile << endl;
+    if (infile)
+        out << "input " << infile << endl;
+    if (in_memory) 
+        out << "in-memory" << endl;
+    if (test_mode)
+        out << "test" << endl;
+    
+    out << "device " << system_id << ":" << board_id << endl;
+    out << "record-size " << record_size << endl;
+    out << "record-count " << record_size << endl;
+    out << "channel " << channel << endl;
+    out << "samplerate " << samplerate << endl;
+    out << "input-range " << ((input_quadrant<0)? "-" : (input_quadrant>0) ? "+" : "") 
+        << input_range << endl;
+    if (eigth_bit)
+        out << "eight-bit" << endl;
+    if (pack_12_bit)
+        out << "pack";
+    if (pyxdatfile)
+        out << "pxplot " << pyxdatfile << endl;
+    if (pyxscriptfile)
+        out << "pxplot-script " << pyxscriptfile << endl;
+    if (start_pyxplot)
+        out << "pxplot-start " << endl;
+}
+
+
+int main(int argc, char * const argv[]) {
+    int option_index;
+    progname = argv[0];
+    for (;; ){
+        int opt = getopt_long(argc, argv, short_options, long_options, &option_index);
+        if (opt==-1)
+            break;
+        else 
+            process_option(opt, optarg);
+    }
+
 
     if (outfile || pyxdatfile) {
         if (test_mode) {
@@ -302,19 +505,20 @@ int main(int argc, char * const argv[]) {
         }        
     }
 
+    if (in_memory || record_count==0) {
+        cerr << "FATAL: cannot pre-allocate memory in continous streaming mode." << endl;
+    }
+
     if (verbose>2) {
         if (infile) 
-            cerr << "reading date from " << infile << endl;
+            cerr << "reading data from " << infile << endl;
         else {
-            static const char * const strategy_names[] = {
-                "polling", "traditional dma", "asynchronious dma", "asynchronious streaming dma"
-            };
             static const char * const channel_names[] = {
                 "none", "A", "B", "A+B"
             };
             cerr << "Aquirering data form board [" << system_id << ',' << board_id << "]";
             cerr << " channel "<< channel_names[channel] << "." << endl;
-            cerr << "using " << strategy_names[strategy] << " strategy." << endl;
+
             if (eigth_bit) {
                 cerr << "Data-width is 8 bit." << endl;
             } else {
@@ -325,9 +529,9 @@ int main(int argc, char * const argv[]) {
                 cerr << "." << endl;
             }
         }
-        cerr << "Record size is "; show_size(cerr, record_size);
+        cerr << "Record size is " << size_str(record_size);
         if (record_count) {
-            cerr << ", reading "; show_size(cerr, record_count); cerr << " records." << endl;
+            cerr << ", reading " << size_str(record_count) << " records." << endl;
         } else {
             cerr << ", streaming continously." << endl;
         }
@@ -353,33 +557,38 @@ int main(int argc, char * const argv[]) {
     }
 
 
-    uint8_t *memory_buffer;
-    //TODO: 12bit packing!
-    int rec_size = (eigth_bit ? 1:2) * record_size;
+    return 1;
 
-    if (test_mode) {
-        memory_buffer = (uint8_t *) calloc(rec_size, 1); 
-        if (!memory_buffer) {
-            cerr << "FATAL: out of memory." << endl;
-            return 1;
-        }
-    } else if (in_memory) {
-        memory_buffer = (uint8_t *) calloc(rec_size, record_count); 
-        if (!memory_buffer) {
-            cerr << "FATAL: out of memory." << endl;
-            return 1;
-        }
-        if (mlock(memory_buffer, rec_size * record_count)<0) {
-            cerr << "FATAL: could not lock memory buffer in physical memory. Try running as root." << endl;
-            return 1;
-        }
-    } else {
-        memory_buffer = (uint8_t *) calloc(rec_size, 1); 
-        if (!memory_buffer) {
-            cerr << "FATAL: out of memory." << endl;
-            return 1;
-        }
+
+
+
+    // allocate buffer
+    uint8_t *memory_buffer;
+    unsigned num_buffers = 8;
+    transfer_length = (eigth_bit ? 1:2) * record_size;
+    if (pack_12_bit)
+        transfer_length * 2 / 3; 
+
+    if (in_memory) {
+        num_buffers = record_count;
     }
+
+    memory_buffer = (uint8_t *) calloc(transfer_length, record_count); 
+    if (!memory_buffer) {
+        cerr << "FATAL: out of memory." << endl;
+        return 1;
+    }
+    if (mlock(memory_buffer, transfer_length * record_count)<0) {
+        cerr << "WARNING: could not lock memory buffer in physical memory. Try running as root." << endl;
+    }
+
+    init_buffer_list(num_buffers);
+    uint8_t *memp = memory_buffer;
+    for (int n=0; n<num_buffers; n++) {
+        push_buffer(memp);
+        memp += transfer_length;
+    }
+
 
     int in_fd = -1, out_fd = -1;
     FILE *dat_fd = NULL;
@@ -391,45 +600,82 @@ int main(int argc, char * const argv[]) {
             return 1;
         }
     } else {
-        if (!init_hardware()) {
+        try {
+
+            board = new ATS::Board(system_id, board_id);
+
+            board->abort_async_read();
+            board->set_record_size(0, record_size);
+            board->set_capture_clock(INTERNAL_CLOCK, ATS::to_samplerate_code(samplerate), CLOCK_EDGE_FALLING, 0);
+
+            board->input_control(CHANNEL_A, DC_COUPLING, ATS::to_inputrange_code(input_quadrant, input_range), IMPEDANCE_50_OHM);
+            board->input_control(CHANNEL_B, DC_COUPLING, ATS::to_inputrange_code(input_quadrant, input_range), IMPEDANCE_50_OHM);
+
+            board->set_trigger_operation(
+                TRIG_ENGINE_OP_J, 
+                TRIG_ENGINE_J, TRIG_CHAN_A, TRIGGER_SLOPE_POSITIVE, 140,
+                TRIG_ENGINE_K, TRIG_CHAN_B, TRIGGER_SLOPE_POSITIVE, 140
+            );
+
+            board->set_trigger_timeout(3);      // one tick is 10usec
+            board->set_trigger_delay(0);
+
+            board->before_async_read(
+                CHANNEL_B,
+                0, transfer_length,
+                1, 0x7FFFFFFF,
+                ADMA_CONTINUOUS_MODE | ADMA_FIFO_ONLY_STREAMING | ADMA_EXTERNAL_STARTCAPTURE
+            );
+            board->start_capture();
+
+        } catch(std::exception &e) {
+            cerr << e.what() << endl;
             cerr << "FATAL: failed to initialize digitizer board." << endl;
             return 1;
         }
     }
 
-    uint8_t *mem_p = memory_buffer;
-    int dat_counter = 1;
-    for (int rec=0; rec<record_count; ++rec) {
-        uint8_t *p;
+    // capture data
+    int dat_counter = 1;    // datapoint counter for pyxplot
+    uint8_t *buffer;
+    for (int rec=0; record_count!=0 || rec<record_count; ++rec) {
         if (in_fd>=0) {
-            if(rec_size!=read(in_fd, mem_p, rec_size)) {
+            buffer = pop_buffer();
+            if(transfer_length!=read(in_fd, buffer, transfer_length)) {
                 cerr << "FATAL: error in read from input." << endl;
             }
-            p = mem_p;
-        } else { 
-            p = read_buffer(mem_p);
-            if (!p) {
-                cerr << "FATAL: error on captureing." << endl;
-            }
+        } else {
+            RETURN_CODE ret; 
+            do {
+                buffer = pop_buffer();
+                // TODO: make timeout value adjustable?
+                ret = board->wait_async_buffer_complete(buffer, 1);
+                if (ret==ApiWaitTimeout) {
+                    // wait for trigger and capture;
+                    // note: the capturecard needs up to 5ms to startup...
+                    push_buffer(buffer);
+                } else if (ret==ApiBufferOverflow) {
+                    // TODO: add flag to ignore overflows
+                    throw std::runtime_error("on-board memory overflow");
+                } 
+            } while (ret!=ApiSuccess);
         }
-        if (in_memory) {
-            mem_p += rec_size;
-        }
+
 
         if (!test_mode && !in_memory) {
             if (out_fd>=0) {
-                if (write(out_fd, p, rec_size) != rec_size) {
+                if (write(out_fd, buffer, transfer_length) != transfer_length) {
                     cerr << "FATAL: error on write to outfile" << endl;
                 }
             }
             if (dat_fd) {
                 if (eigth_bit) {
-                    uint8_t * dat = p;
+                    uint8_t * dat = buffer;
                     for (int i=0; i<record_count; ++i) {
                         fprintf(dat_fd, "%d   %d\n", dat_counter++, *dat++);
                     }
                 } else if (pack_12_bit) {
-                    uint8_t * dat = p;
+                    uint8_t * dat = buffer;
                     for (int i=0; i<record_count; ++i) {
                         unsigned a = (*dat++) << 4;
                         unsigned x = *dat++;
@@ -440,7 +686,7 @@ int main(int argc, char * const argv[]) {
                         fprintf(dat_fd, "%d   %d\n", dat_counter++, b);
                     }
                 } else {
-                    uint16_t * dat = (uint16_t *)p;
+                    uint16_t * dat = (uint16_t *)buffer;
                     for (int i=0; i<record_count; ++i) {
                         fprintf(dat_fd, "%d   %d\n", dat_counter++, *dat++);
                     }
@@ -454,7 +700,7 @@ int main(int argc, char * const argv[]) {
         int dat_counter = 1;
         for (int rec=0; rec<record_count; ++rec) {
             if (out_fd>=0) {
-                if (write(out_fd, p, rec_size) != rec_size) {
+                if (write(out_fd, p, transfer_length) != transfer_length) {
                     cerr << "FATAL: error on write to outfile" << endl;
                 }
             }
@@ -482,12 +728,12 @@ int main(int argc, char * const argv[]) {
                     }
                 }
             }
-
-            p += rec_size;
         }
     }
 
-    release_hardware();
+    if (!infile)
+        board->abort_async_read();
+
 
     if (in_fd>=0) close(in_fd);
     if (out_fd>=0) close(out_fd);
@@ -498,7 +744,40 @@ int main(int argc, char * const argv[]) {
     }
 }
 
+uint8_t **buffer_list;
+int buffer_list_index;
+int buffer_list_count;
+int buffer_list_capacity;
 
-bool init_hardware() { return false; }
-uint8_t * read_buffer(uint8_t *buffer) { return NULL; }
-bool release_hardware() { return false; }
+void init_buffer_list(int count) {
+    buffer_list = (uint8_t **) calloc(sizeof(uint8_t *), count);
+    buffer_list_capacity = count;
+}
+
+void push_buffer(uint8_t *buffer) {
+    if (buffer_list_count==buffer_list_capacity) {
+        throw std::runtime_error("bufferlist overflow");
+    }
+    int n = buffer_list_index + 1;
+    if (n>buffer_list_capacity) n = 0;
+    buffer_list[n] = buffer;
+    buffer_list_count++;
+}
+
+uint8_t *pop_buffer() {
+    if (buffer_list_count==0) {
+        throw std::runtime_error("bufferlist underflow");
+    }
+    buffer_list_count--;
+
+    buffer_list_index++;
+    if (buffer_list_index>buffer_list_capacity) 
+        buffer_list_index = 0;
+    return buffer_list[buffer_list_index];
+}
+
+
+
+
+
+

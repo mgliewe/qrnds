@@ -56,8 +56,6 @@ int main() {
             cout << "\tCPLD version: " 
                 << board.cpld_version() << endl;
 
-            cout << "\tNumber of channels: " << board.num_channels << endl; 
-
             cout << "\tOn-Board memory: "; 
                 show_size(cout, board.onboard_memory); 
                 cout << endl;

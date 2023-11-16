@@ -1,6 +1,6 @@
 
 
-CXXOPT += -g -O3
+CXXOPT += -g
 LXXOPT += -L../lib -lATSApi
 
 

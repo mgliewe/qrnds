@@ -67,27 +67,11 @@ function do_stage()
 			
 
 			if stage==1 then
-				print("static int show_" .. func_name .. ';')
 				print("static " .. return_type .. ptr 
 						.. " (* old_" .. func_name .. ") " 
 						.. formal_parm .. ';')
 			end
 
-			if stage==2 then
-
-				if dont_show[func_name] then
-					print("\tshow_" .. func_name .. " = 0;");
-				else
-					print("\tshow_" .. func_name .. " = 1;");
-				end
-
-				-- print("\tp = dlsym(dll, \"" .. func_name .. "\");");
-				print("\tp = dlsym(dll, \"" .. func_name .. "\");");
-				
-				print("\tif(!p) { out(\"FATAL: cannot dlsym of " .. func_name .. "\\n\"); }");
-				print("\told_" .. func_name .. " = p;")
-				print();
-			end
 
 			if stage==3 then
 
@@ -173,9 +157,16 @@ function do_stage()
 
 					if func_name=='AlazarGetChannelInfo' then
 						print([[
-							fprintf(stderr, "\t    memorySize: %d\n", memorySize);
-							fprintf(stderr, "\t    bitsPerSample: %d\n", bitsPerSample);
+							fprintf(stderr, "\t    memorySize: %d\n", *memorySize);
+							fprintf(stderr, "\t    bitsPerSample: %d\n", *bitsPerSample);
 						]]);
+					end
+					if func_name=='AlazarGetChannelInfoEx' then
+						print([[
+							fprintf(stderr, "\t    memorySize: %ld\n", *memorySize);
+							fprintf(stderr, "\t    bitsPerSample: %d\n", *bitsPerSample);
+						]]);
+					end
 
 					print("\t}")
 					print("\treturn result;")
@@ -191,7 +182,7 @@ stage=1;
 
 
 print([[
-	#define _GNU_SOURCE
+#define _GNU_SOURCE
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -202,10 +193,7 @@ print([[
 #include "../include/AlazarApi.h"
 #include "../include/AlazarDSP.h"
 
-#define API_SO "../lib/libATSApi.so"
-//#define API_SO "/lib/x86_64-linux-gnu/libATSApi.so.0"
 
-#define LOGFILE "/tmp/ats-api.log"
 #define MAX_REPEAT 4
 ]])
 
@@ -221,28 +209,8 @@ static int repeat_count;
 static void out(const char *str) {
 	write(2, str, strlen(str));
 }
-
-
-static void load_api_functions() {
-	void *p;
-	void *dll;
-
-	dll=dlopen(API_SO, RTLD_NOW);
 ]])
-
-do_stage()
-print("}\n")
 
 stage = 3
 do_stage()
 
-
-print([[
-
-//static void init_ats_log() __attribute__((constructor));
-
-void init_ats_log() {
-	load_api_functions();
-}
-
-]])
