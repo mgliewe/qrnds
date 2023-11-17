@@ -21,6 +21,8 @@ int verbose = 3;
 char *infile = NULL;
 char *outfile = NULL;
 
+
+
 int system_id = 1;
 int board_id = 1;
 int channel = 2;
@@ -31,7 +33,7 @@ bool eigth_bit = false;
 bool pack_12_bit = false;
 bool in_memory = false;
 bool test_mode = false;
-unsigned record_size = 1024;
+unsigned record_size = 8 * 1024;
 unsigned record_count = 1024;
 char *pyxdatfile = NULL;
 char *pyxscriptfile = NULL;
@@ -46,7 +48,6 @@ void push_buffer(uint8_t *buffer);
 uint8_t *pop_buffer();
 
 
-const char *short_options = "hvd:o:2c:8pmtr:n:s:f:F::S::";
 
 enum options {
     OPT_NULL = 0,
@@ -103,6 +104,7 @@ struct option long_options[] = {
 
 };
 
+const char *short_options = "hvd:o:2c:8pmtr:n:s:f:F::S::";
 
 void help()  {
     cerr << "usage: " << progname << " <options>" << endl
@@ -112,25 +114,27 @@ void help()  {
          << "\t--help, -h                show this help" << endl
          << "\t--verbose, -v             verbose output" << endl 
 
-         << "\t--output <file>, -o       write data to <file>, use '-' for stdout" << endl
-         << "\t input=<file>, -f         read from file instead of capturing" << endl
+         << "\t--config=<file>, -c       read configuration from <file>" << endl
 
-         << "\t--device <dev>, -d        device to capture from. Default: 1:1" << endl
-         << "\t--channel <c>, -c         channel, default: channel 'B'" << endl
-         << "\t--rate <r>, -r            sample rate, default 3.8G" << endl
-         << "\t--two-channel, -2         aquire channel A and B, store interleaved data" << endl
-         << "\t--eight-bit, -8           capture 8 bit per sample" << endl
-         << "\t--pack, -p                enable 12-bit packing in output" << endl
-         << "\t--in-memory, -m           capture to memory before writing to disk" << endl
-         << "\t--test, -t                just read data, dont write to disk" << endl
-         << "\t--record-size <n>, -r     record size, default: 1024 samples" << endl
-         << "\t--record-count <n>, -n    record count, use 0 for unlimited. Default: 0" << endl
+         << "\t--output=<file>, -o       write data to <file>, use '-' for stdout" << endl
+         << "\t--input=<file>            read from file instead of capturing" << endl
 
-         << "\t--list-ranges             " << endl
-         << "\t--list-rates              " << endl
+         << "\t--device=<dev>            device to capture from. Default: 1:1" << endl
+         << "\t--channel=<c>             channel, default: channel 'B'" << endl
+         << "\t--rate=<r>                sample rate, default 3.8G" << endl
+         << "\t--two-channel             aquire channel A and B, store interleaved data" << endl
+         << "\t--eight-bit               capture 8 bit per sample" << endl
+         << "\t--pack                    enable 12-bit packing in output" << endl
+         << "\t--in-memory               capture to memory before writing to disk" << endl
+         << "\t--test                    just read data, dont write to disk" << endl
+         << "\t--record-size=<n>         record size, default: 1024 samples" << endl
+         << "\t--record-count=<n>        record count, use 0 for unlimited. Default: 0" << endl
 
-         << "\t--pyxplot [<file>], -F    generate data file suitable for pyxplot, append .dat if appropriate " << endl
-         << "\t--pyxplot-script, -S      generate pyxplot script file" << endl
+         << "\t--list-ranges             show supported input voltage ranges" << endl
+         << "\t--list-rates              show supported samplerates" << endl
+
+         << "\t--pyxplot[=<file>]        generate data file suitable for pyxplot, append .dat if appropriate " << endl
+         << "\t--pyxplot-script          generate pyxplot script file" << endl
          << endl
 
          << "Examples:" <<  endl
@@ -585,11 +589,6 @@ int main(int argc, char * const argv[]) {
             cerr << "." << endl;
         }        
     }
-
-
-    return 1;
-
-
 
 
     // allocate buffer

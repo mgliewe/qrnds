@@ -8,6 +8,39 @@
 
 namespace ATS {
 
+struct Configuration {
+    int system_id;          ///< system id
+    int board_id;           ///< board id
+    int channel;            ///< input channel to capture
+    long samplerate;        ///< samplerate for capture
+    int input_quadrants;    ///< input voltage type, 
+                            ///< use 0: -input_range < v < input_range, 
+                            ///<    -1: -input_range < v < 0
+                            ///<     1: 0 < v < input_range  
+    int input_range;        ///< input voltage sensivity in mV
+    bool eigth_bit;         
+    bool pack_12_bit;
+    unsigned record_size;
+
+    Configuration() : 
+        system_id(0), board_id(0),
+        channel(1),
+        samplerate(1800*1000*1000),
+        input_quadrants(0), input_range(1250),
+        eigth_bit(false), pack_12_bit(false), 
+        record_size(8 * 1024)
+        { }
+
+    Configuration(const char *config) : 
+        Configuration()
+        { parse_config_string(config); }
+
+    void parse_config_string(const char *config);
+    void set_config(const char *config, const char *value);
+    void set_config(const char *config, unsigned value);
+};
+
+
 class Board {
     HANDLE handle;
 public:

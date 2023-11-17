@@ -117,8 +117,9 @@ Data-processing Filters:
 - Histogramm:
   a filter, building a histogram over time
 
-- DeCorrelate:
+- AutoCorrelate:
   a filter, trying to decorrelate input data based on statistical propabillity
+  ?? maybe using the algorithm describred in: https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=4310156
 
 - VonNeumannDebias:
   a filter, implementing the von Neuman de-bias algorithm https://en.wikipedia.org/wiki/Randomness_extractor#Von_Neumann_extractor

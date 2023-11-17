@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include "ATS-SDK.h"
+#include <cstring>
 #include <stdexcept>
 namespace ATS {
 
@@ -70,6 +71,9 @@ const struct sample_rates sample_rates[] = {
     {  180*MS, SAMPLE_RATE_180MSPS },
     {  200*MS, SAMPLE_RATE_200MSPS },
     {  250*MS, SAMPLE_RATE_250MSPS },
+    {  300*MS, SAMPLE_RATE_300MSPS },
+    {  350*MS, SAMPLE_RATE_350MSPS },
+    {  370*MS, SAMPLE_RATE_370MSPS },
     {  400*MS, SAMPLE_RATE_400MSPS },
     {  500*MS, SAMPLE_RATE_500MSPS },
     {  800*MS, SAMPLE_RATE_800MSPS },
@@ -83,9 +87,6 @@ const struct sample_rates sample_rates[] = {
     { 3000*MS, SAMPLE_RATE_3000MSPS },
     { 3600*MS, SAMPLE_RATE_3600MSPS },
     { 4000*MS, SAMPLE_RATE_4000MSPS },
-    {  300*MS, SAMPLE_RATE_300MSPS },
-    {  350*MS, SAMPLE_RATE_350MSPS },
-    {  370*MS, SAMPLE_RATE_370MSPS },
     {  0, (ALAZAR_SAMPLE_RATES) 0 }
 };
 
@@ -107,23 +108,23 @@ const struct input_ranges input_ranges[] = {
     {  0,    50, INPUT_RANGE_PM_50_MV },           ///< +/- 50mV
     {  0,    80, INPUT_RANGE_PM_80_MV },           ///< +/- 80mV
     {  0,   100, INPUT_RANGE_PM_100_MV },          ///< +/- 100mV
+    {  0,   125, INPUT_RANGE_PM_125_MV },          ///< +/- 125mV
     {  0,   200, INPUT_RANGE_PM_200_MV },          ///< +/- 200mV
+    {  0,   250, INPUT_RANGE_PM_250_MV },          ///< +/- 250mV
     {  0,   400, INPUT_RANGE_PM_400_MV },          ///< +/- 400mV
     {  0,   500, INPUT_RANGE_PM_500_MV },          ///< +/- 500mV
     {  0,   800, INPUT_RANGE_PM_800_MV },          ///< +/- 800mV
     {  0,  1000, INPUT_RANGE_PM_1_V },             ///< +/- 1V
+    {  0,  1250, INPUT_RANGE_PM_1_V_25 },          ///< +/- 1.25V
     {  0,  2000, INPUT_RANGE_PM_2_V },             ///< +/- 2V
+    {  0,  2500, INPUT_RANGE_PM_2_V_5 },           ///< +/- 2.5V
     {  0,  4000, INPUT_RANGE_PM_4_V },             ///< +/- 4V
     {  0,  5000, INPUT_RANGE_PM_5_V },             ///< +/- 5V
     {  0,  8000, INPUT_RANGE_PM_8_V },             ///< +/- 8V
     {  0, 10000, INPUT_RANGE_PM_10_V },            ///< +/- 10V
+    {  0, 16000, INPUT_RANGE_PM_16_V },            ///< +/- 16V
     {  0, 20000, INPUT_RANGE_PM_20_V },            ///< +/- 20V
     {  0, 40000, INPUT_RANGE_PM_40_V },            ///< +/- 40V
-    {  0, 16000, INPUT_RANGE_PM_16_V },            ///< +/- 16V
-    {  0,  1250, INPUT_RANGE_PM_1_V_25 },          ///< +/- 1.25V
-    {  0,  2500, INPUT_RANGE_PM_2_V_5 },           ///< +/- 2.5V
-    {  0,   125, INPUT_RANGE_PM_125_MV },          ///< +/- 125mV
-    {  0,   250, INPUT_RANGE_PM_250_MV },          ///< +/- 250mV
 
     { +1,    40, INPUT_RANGE_0_TO_40_MV },         ///< 0 to 40mV
     { +1,    80, INPUT_RANGE_0_TO_80_MV },         ///< 0 to 80mV
@@ -144,8 +145,8 @@ const struct input_ranges input_ranges[] = {
     { +1, 10000, INPUT_RANGE_0_TO_10_V },          ///< 0 to 10V
     { +1, 16000, INPUT_RANGE_0_TO_16_V },          ///< 0 to 16V
     { +1, 20000, INPUT_RANGE_0_TO_20_V },          ///< 0 to 20V
-    { +1, 80000, INPUT_RANGE_0_TO_80_V },          ///< 0 to 80V
     { +1, 32000, INPUT_RANGE_0_TO_32_V },          ///< 0 to 32V
+    { +1, 80000, INPUT_RANGE_0_TO_80_V },          ///< 0 to 80V
 
     { -1,    40, INPUT_RANGE_0_TO_MINUS_40_MV },   ///< 0 to -40mV
     { -1,    80, INPUT_RANGE_0_TO_MINUS_80_MV },   ///< 0 to -80mV
@@ -166,8 +167,8 @@ const struct input_ranges input_ranges[] = {
     { -1, 10000, INPUT_RANGE_0_TO_MINUS_10_V },    ///< 0 to -10V
     { -1, 16000, INPUT_RANGE_0_TO_MINUS_16_V },    ///< 0 to -16V
     { -1, 20000, INPUT_RANGE_0_TO_MINUS_20_V },    ///< 0 to -20V
-    { -1, 80000, INPUT_RANGE_0_TO_MINUS_80_V },    ///< 0 to -80V
     { -1, 32000, INPUT_RANGE_0_TO_MINUS_32_V },    ///< 0 to -32V
+    { -1, 80000, INPUT_RANGE_0_TO_MINUS_80_V },    ///< 0 to -80V
 
     { 0,      0, (ALAZAR_INPUT_RANGES) 0 }
 
@@ -181,6 +182,57 @@ ALAZAR_INPUT_RANGES to_inputrange_code(int q, int mv) {
     return (ALAZAR_INPUT_RANGES) 0;
 }
 
+
+void Configuration::set_config(const char *config, const char *value) {
+
+    if (strcmp(config, "device")==0) {
+
+    } else if (strcmp(config, "channel")==0) {
+
+    } else if (strcmp(config, "rate")==0) {
+        
+    } else if (strcmp(config, "range")==0) {
+
+    } else if (strcmp(config, "pack")==0) {
+
+    } else if (strcmp(config, "eightbit")==0) {
+
+    } else if (strcmp(config, "recordsize")==0) {
+
+    }
+}
+
+void Configuration::parse_config_string(const char *config) {
+
+    char *cfg_copy = strdup(config);
+    char *cfg = cfg_copy;
+    char *p = cfg;
+    for (;*p;) {
+        char *ident, *value, *p;
+        while (isblank(*cfg)) cfg++;
+        p=ident=cfg;
+        while(isalnum(*p)) 
+            *p++;
+        char c=*p; *p++ = 0;
+        while (isblank(c))
+            c=*p++;
+        if (c=='=') {
+            while(isblank(*p))
+                p++;
+            p = value = cfg;
+            while (*p && *p!=',') {
+                p++;
+            }
+            *p = 0;
+            set_config(ident, value);
+        } else {
+            set_config(ident, "");
+        }
+
+        while(*p==',') p++;
+    }
+    free(cfg_copy);
+}
 
 Board::Board(int system_id, int board_id) {
     handle = AlazarGetBoardBySystemID(system_id, board_id);
