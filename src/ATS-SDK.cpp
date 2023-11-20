@@ -95,7 +95,7 @@ ALAZAR_SAMPLE_RATES to_samplerate_code(long rate) {
         if (p->rate==rate)
             return p->code;
     }
-    return (ALAZAR_SAMPLE_RATES) 0;
+    throw std::runtime_error("unsupported sampling rate: " + std::to_string(rate));
 }
 
 const struct input_ranges input_ranges[] = {
@@ -179,7 +179,7 @@ ALAZAR_INPUT_RANGES to_inputrange_code(int q, int mv) {
         if (p->q == q && p->mv==mv)
             return p->code;
     }
-    return (ALAZAR_INPUT_RANGES) 0;
+    throw std::runtime_error("unsupported input range: " + std::to_string(q) + "," + std::to_string(mv));
 }
 
 
@@ -237,7 +237,7 @@ void Configuration::parse_config_string(const char *config) {
 Board::Board(int system_id, int board_id) {
     handle = AlazarGetBoardBySystemID(system_id, board_id);
     if (handle==NULL) {
-        throw std::runtime_error("Alazar Capture board was not found at []"
+        throw std::runtime_error("Alazar Capture board was not found at ["
                                   + std::to_string(system_id) + ":" + std::to_string(board_id) 
                                   + "]");
     }
@@ -314,8 +314,8 @@ void Board::set_trigger_operation(
 ) {
     RETURN_CODE ret = AlazarSetTriggerOperation(
         handle, operation, 
-        engine1, source1, level1, slope1,
-        engine2, source2, level2, slope2
+        engine1, source1, slope1, level1,
+        engine2, source2, slope2, level2
     );
 
     if (ret!=ApiSuccess) {

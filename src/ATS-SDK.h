@@ -82,6 +82,14 @@ public:
     long get_parameter(ALAZAR_CHANNELS channel, ALAZAR_PARAMETERS parameter);
     void set_parameter(ALAZAR_CHANNELS channel, ALAZAR_PARAMETERS parameter, long value);
 
+    uint16_t *alloc_buffer(size_t sz) {
+        return (uint16_t *) AlazarAllocBufferU16Ex(handle, sz);
+    }
+
+    void free_buffer(uint16_t *buffer) {
+        AlazarFreeBufferU16Ex(handle, buffer);
+    }
+
     void before_async_read(
         ALAZAR_CHANNELS channelSelect, 
         long transferOffset, U32 transferLength, 
@@ -118,7 +126,6 @@ extern const struct input_ranges {
 } input_ranges[];
 
 ALAZAR_INPUT_RANGES to_inputrange_code(int quadrants, int milli_volts);
-
 
 } /* end namespace */
 

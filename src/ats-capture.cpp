@@ -16,7 +16,7 @@ using std::endl;
 
 
 const char *progname;
-int verbose = 3;
+int verbose = 1;
 
 char *infile = NULL;
 char *outfile = NULL;
@@ -26,7 +26,7 @@ char *outfile = NULL;
 int system_id = 1;
 int board_id = 1;
 int channel = 2;
-long samplerate = 3800L * 1000 * 1000;
+long samplerate = 1800L * 1000 * 1000;
 int input_range = 1250;
 int input_quadrant = 0;
 bool eigth_bit = false;
@@ -36,16 +36,14 @@ bool test_mode = false;
 unsigned record_size = 8 * 1024;
 unsigned record_count = 1024;
 char *pyxdatfile = NULL;
-char *pyxscriptfile = NULL;
 bool start_pyxplot = false;
 
 ATS::Board *board = 0;
-unsigned int transfer_length;
 
 /** a ring-list of buffers */
 void init_buffer_list(int count);
-void push_buffer(uint8_t *buffer);
-uint8_t *pop_buffer();
+void push_buffer(uint16_t *buffer);
+uint16_t *pop_buffer();
 
 
 
@@ -67,8 +65,6 @@ enum options {
     OPT_EIGHT_BIT,
     OPT_PACK,
     OPT_PYXPLOT,
-    OPT_PYXPLOT_SCRIPT,
-    OPT_PYXPLOT_START,
     OPT_LIST_RATES,
     OPT_LIST_RANGES,
     OPT_LAST
@@ -97,14 +93,12 @@ struct option long_options[] = {
     { "pack",           no_argument,        0, OPT_PACK },
 
     { "pyxplot",        optional_argument,  0, OPT_PYXPLOT },
-    { "pyxplot-script", optional_argument,  0, OPT_PYXPLOT_SCRIPT },
-    { "pyxplot-start",  no_argument,        0, OPT_PYXPLOT_START },
 
     { NULL, 0, 0, 0 }
 
 };
 
-const char *short_options = "hvd:o:2c:8pmtr:n:s:f:F::S::";
+const char *short_options = "hvc:o:i:D:C:R:28pmtr:n:y::";
 
 void help()  {
     cerr << "usage: " << progname << " <options>" << endl
@@ -117,24 +111,23 @@ void help()  {
          << "\t--config=<file>, -c       read configuration from <file>" << endl
 
          << "\t--output=<file>, -o       write data to <file>, use '-' for stdout" << endl
-         << "\t--input=<file>            read from file instead of capturing" << endl
+         << "\t--input=<file>, -i        read from file instead of capturing" << endl
 
-         << "\t--device=<dev>            device to capture from. Default: 1:1" << endl
-         << "\t--channel=<c>             channel, default: channel 'B'" << endl
-         << "\t--rate=<r>                sample rate, default 3.8G" << endl
-         << "\t--two-channel             aquire channel A and B, store interleaved data" << endl
-         << "\t--eight-bit               capture 8 bit per sample" << endl
-         << "\t--pack                    enable 12-bit packing in output" << endl
-         << "\t--in-memory               capture to memory before writing to disk" << endl
-         << "\t--test                    just read data, dont write to disk" << endl
-         << "\t--record-size=<n>         record size, default: 1024 samples" << endl
-         << "\t--record-count=<n>        record count, use 0 for unlimited. Default: 0" << endl
+         << "\t--device=<dev>, -D        device to capture from. Default: 1:1" << endl
+         << "\t--channel=<c> , -C        channel, default: channel 'B'" << endl
+         << "\t--rate=<r>, -R            sample rate, default 3.8G" << endl
+         << "\t--two-channel, -2         aquire channel A and B, store interleaved data" << endl
+         << "\t--eight-bit, -8           capture 8 bit per sample" << endl
+         << "\t--pack, -p                enable 12-bit packing in output" << endl
+         << "\t--in-memory, -m           capture to memory before writing to disk" << endl
+         << "\t--test, -t                just read data, dont write to disk" << endl
+         << "\t--record-size=<n>, -r     record size, default: 1024 samples" << endl
+         << "\t--record-count=<n>, -n    record count, use 0 for unlimited. Default: 0" << endl
 
          << "\t--list-ranges             show supported input voltage ranges" << endl
          << "\t--list-rates              show supported samplerates" << endl
 
-         << "\t--pyxplot[=<file>]        generate data file suitable for pyxplot, append .dat if appropriate " << endl
-         << "\t--pyxplot-script          generate pyxplot script file" << endl
+         << "\t--pyxplot[=<file>], -y    generate data file suitable for pyxplot, append .dat if appropriate " << endl
          << endl
 
          << "Examples:" <<  endl
@@ -144,8 +137,8 @@ void help()  {
          << "\t\t" << progname << " -r 64k -n 0 -o -" << endl
          << "\t# benchmarking thruput of 1Gsamples" << endl
          << "\t\ttime " << progname << "-v -r 1k -n 1M -m" << endl
-         << "\t# show 1Msamples in pyxplot" << endl
-         << "\t\t" << progname << " -r 1k -n 1k -F out.dat -S; pyplot out.pyxplot"
+         << "\t# show 1M samples in pyxplot" << endl
+         << "\t\t" << progname << " -r 1k -n 1k -F out.dat -S; pyxplot out.pyxplot"
     ;
 }
 
@@ -168,6 +161,8 @@ int to_number(const char *str, unsigned base=1024, unsigned int factor = 1) {
             number *= base*base; break;
         case 'G':
             number *= base*base*base; break;
+        case 0:
+            break;
         default:
             throw std::runtime_error("bad number format");
     }
@@ -247,13 +242,13 @@ void process_option(int short_option, const char *optarg) {
             break;
         }
 
-        case 'f': 
+        case 'i': 
         case OPT_INPUT: {
             infile = strdup(optarg);
             break;
         }
 
-        case 'd': 
+        case 'D': 
         case OPT_DEVICE: {
             parse_board_address(optarg, system_id, board_id);
             break;
@@ -271,7 +266,7 @@ void process_option(int short_option, const char *optarg) {
             break;
         }
 
-        case 'c': 
+        case 'C': 
         case OPT_CHANNEL: {
             switch (*optarg) {
                 case '0': case 'a': case 'A':
@@ -321,7 +316,7 @@ void process_option(int short_option, const char *optarg) {
             break;
         }
 
-        case 'F': 
+        case 'y': 
         case OPT_PYXPLOT: {
             if (optarg && *optarg) {
                 pyxdatfile = strdup(optarg);
@@ -341,33 +336,6 @@ void process_option(int short_option, const char *optarg) {
                 strcat(pyxdatfile, ".dat");
             }
             break;
-        }
-
-        case 'S': 
-        case OPT_PYXPLOT_SCRIPT: {
-            if (optarg && *optarg) {
-                pyxscriptfile = strdup(optarg);
-            } else {
-                if (!pyxdatfile) {
-                    cerr << "cannot derive pyxplot filename from pyxscript dat-file" << endl;
-                    exit(0);
-                }
-                char *p = strrchr(pyxdatfile, '.');
-                if (!p) {
-                    cerr << "cannot derive pyxplot filename from pyxscript dat-file" << endl;
-                    exit(0);
-                }
-                int len = p - pyxdatfile;
-                pyxscriptfile = (char *) malloc(len+8+1);
-                strncpy(pyxscriptfile, pyxdatfile, len);
-                strcat(pyxscriptfile, ".pyxplot");
-            }
-            break;
-        }
-
-        case 'R': 
-        case OPT_PYXPLOT_START: {
-            start_pyxplot = true;
         }
 
         case OPT_LIST_RATES: {
@@ -508,8 +476,6 @@ void write_config(std::ostream &out) {
         out << "pack";
     if (pyxdatfile)
         out << "pxplot " << pyxdatfile << endl;
-    if (pyxscriptfile)
-        out << "pxplot-script " << pyxscriptfile << endl;
     if (start_pyxplot)
         out << "pxplot-start " << endl;
 }
@@ -517,7 +483,13 @@ void write_config(std::ostream &out) {
 
 int main(int argc, char * const argv[]) {
     int option_index;
+
     progname = argv[0];
+    if (argc==1) {
+        usage();
+        exit(0);
+    }
+
     for (;; ){
         int opt = getopt_long(argc, argv, short_options, long_options, &option_index);
         if (opt==-1)
@@ -543,14 +515,14 @@ int main(int argc, char * const argv[]) {
         cerr << "FATAL: cannot pre-allocate memory in continous streaming mode." << endl;
     }
 
-    if (verbose>2) {
+    if (verbose>1) {
         if (infile) 
             cerr << "reading data from " << infile << endl;
         else {
             static const char * const channel_names[] = {
                 "none", "A", "B", "A+B"
             };
-            cerr << "Aquirering data form board [" << system_id << ',' << board_id << "]";
+            cerr << "Capturing data form board [" << system_id << ',' << board_id << "]";
             cerr << " channel "<< channel_names[channel] << "." << endl;
 
             if (eigth_bit) {
@@ -583,9 +555,6 @@ int main(int argc, char * const argv[]) {
         }
         if (pyxdatfile) {
             cerr << "Generating pyxplot data-file to " << pyxdatfile;
-            if (pyxscriptfile) {
-                cerr << ", pyxplot script is written to " << pyxscriptfile;
-            }
             cerr << "." << endl;
         }        
     }
@@ -594,43 +563,41 @@ int main(int argc, char * const argv[]) {
     // allocate buffer
     uint8_t *memory_buffer;
     unsigned num_buffers = 8;
-    transfer_length = (eigth_bit ? 1:2) * record_size;
+    size_t buffer_size = (eigth_bit ? 1:2) * record_size;
     if (pack_12_bit)
-        transfer_length * 2 / 3; 
+        buffer_size * 2 / 3; 
 
     if (in_memory) {
         num_buffers = record_count;
     }
 
-    memory_buffer = (uint8_t *) calloc(transfer_length, record_count); 
-    if (!memory_buffer) {
-        cerr << "FATAL: out of memory." << endl;
-        return 1;
-    }
-    if (mlock(memory_buffer, transfer_length * record_count)<0) {
-        cerr << "WARNING: could not lock memory buffer in physical memory. Try running as root." << endl;
-    }
-
-    init_buffer_list(num_buffers);
-    uint8_t *memp = memory_buffer;
-    for (int n=0; n<num_buffers; n++) {
-        push_buffer(memp);
-        memp += transfer_length;
-    }
-
+    uint16_t **buffers = (uint16_t **) calloc(sizeof (uint16_t *), num_buffers);
 
     int in_fd = -1, out_fd = -1;
     FILE *dat_fd = NULL;
 
+    if (!test_mode) {
+        out_fd = open(outfile, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+        if (out_fd<0) {
+            throw std::runtime_error("failed to create output file " + std::string(outfile) + ": " + std::string(strerror(errno)));
+        }
+    }
+
     if (infile) {
         in_fd = open(infile, O_RDONLY);
         if (!in_fd) {
-            cerr << "FATAL: cannot open " << infile << " for reading." << endl;
-            return 1;
+            throw std::runtime_error(std::string("cannot open ") + infile + " for reading: " + std::string(strerror(errno)));
         }
+
+        init_buffer_list(num_buffers);
+        for (int n=0; n<num_buffers; ++n) {
+            uint16_t *buffer = (uint16_t *) malloc(buffer_size);
+            push_buffer(buffer);
+            buffers[n] = buffer;
+        }   
+ 
     } else {
         try {
-
             board = new ATS::Board(system_id, board_id);
 
             board->abort_async_read();
@@ -651,60 +618,72 @@ int main(int argc, char * const argv[]) {
 
             board->before_async_read(
                 CHANNEL_B,
-                0, transfer_length,
+                0, record_size,
                 1, 0x7FFFFFFF,
                 ADMA_CONTINUOUS_MODE | ADMA_FIFO_ONLY_STREAMING | ADMA_EXTERNAL_STARTCAPTURE
             );
+
+            init_buffer_list(num_buffers);
+            for (int n=0; n<num_buffers; ++n) {
+                uint16_t *buffer = board->alloc_buffer(buffer_size);
+                board->post_async_buffer(buffer, buffer_size);
+                push_buffer(buffer);
+                buffers[n] = buffer;
+            }   
+
             board->start_capture();
 
         } catch(std::exception &e) {
             cerr << e.what() << endl;
-            cerr << "FATAL: failed to initialize digitizer board." << endl;
-            return 1;
+            std::throw_with_nested(std::runtime_error("failed to initialize digitizer board."));
         }
     }
 
     // capture data
     int dat_counter = 1;    // datapoint counter for pyxplot
-    uint8_t *buffer;
-    for (int rec=0; record_count!=0 || rec<record_count; ++rec) {
+    uint16_t *buffer;
+    for (int rec=0; record_count==0 || rec<record_count; ++rec) {
         if (in_fd>=0) {
             buffer = pop_buffer();
-            if(transfer_length!=read(in_fd, buffer, transfer_length)) {
-                cerr << "FATAL: error in read from input." << endl;
+            if(buffer_size!=read(in_fd, buffer, buffer_size)) {
+                throw std::runtime_error("error on read from input file: " + std::string(strerror(errno)));
             }
         } else {
             RETURN_CODE ret; 
             do {
                 buffer = pop_buffer();
                 // TODO: make timeout value adjustable?
-                ret = board->wait_async_buffer_complete(buffer, 1);
+                ret = board->wait_async_buffer_complete(buffer, 10);
                 if (ret==ApiWaitTimeout) {
                     // wait for trigger and capture;
                     // note: the capturecard needs up to 5ms to startup...
-                    push_buffer(buffer);
+
+                    // TODO: add flag to ignore overflows
+                    throw std::runtime_error("timeout waiting for capture data");
+
                 } else if (ret==ApiBufferOverflow) {
+
                     // TODO: add flag to ignore overflows
                     throw std::runtime_error("on-board memory overflow");
                 } 
             } while (ret!=ApiSuccess);
         }
 
-
         if (!test_mode && !in_memory) {
             if (out_fd>=0) {
-                if (write(out_fd, buffer, transfer_length) != transfer_length) {
-                    cerr << "FATAL: error on write to outfile" << endl;
+                fprintf(stderr, "%d\r", rec); fflush(stderr);
+                if (write(out_fd, buffer, buffer_size) != buffer_size) {
+                    throw std::runtime_error("error on write to outfile: " + std::string(strerror(errno)));
                 }
             }
             if (dat_fd) {
                 if (eigth_bit) {
-                    uint8_t * dat = buffer;
+                    uint8_t * dat = (uint8_t *) buffer;
                     for (int i=0; i<record_count; ++i) {
                         fprintf(dat_fd, "%d   %d\n", dat_counter++, *dat++);
                     }
                 } else if (pack_12_bit) {
-                    uint8_t * dat = buffer;
+                    uint8_t * dat = (uint8_t *) buffer;
                     for (int i=0; i<record_count; ++i) {
                         unsigned a = (*dat++) << 4;
                         unsigned x = *dat++;
@@ -722,6 +701,9 @@ int main(int argc, char * const argv[]) {
                 }
             }
         }
+        push_buffer(buffer);
+        if (in_fd<0) 
+            board->post_async_buffer(buffer, buffer_size);
     }
 
     if (in_memory) {
@@ -729,7 +711,7 @@ int main(int argc, char * const argv[]) {
         int dat_counter = 1;
         for (int rec=0; rec<record_count; ++rec) {
             if (out_fd>=0) {
-                if (write(out_fd, p, transfer_length) != transfer_length) {
+                if (write(out_fd, p, buffer_size) != buffer_size) {
                     cerr << "FATAL: error on write to outfile" << endl;
                 }
             }
@@ -768,22 +750,19 @@ int main(int argc, char * const argv[]) {
     if (out_fd>=0) close(out_fd);
     if (dat_fd) fclose(dat_fd);
 
-    if (pyxscriptfile) {
-        // TODO:
-    }
 }
 
-uint8_t **buffer_list;
+uint16_t **buffer_list;
 int buffer_list_index;
 int buffer_list_count;
 int buffer_list_capacity;
 
 void init_buffer_list(int count) {
-    buffer_list = (uint8_t **) calloc(sizeof(uint8_t *), count);
+    buffer_list = (uint16_t **) calloc(sizeof(uint8_t *), count);
     buffer_list_capacity = count;
 }
 
-void push_buffer(uint8_t *buffer) {
+void push_buffer(uint16_t *buffer) {
     if (buffer_list_count==buffer_list_capacity) {
         throw std::runtime_error("bufferlist overflow");
     }
@@ -793,7 +772,7 @@ void push_buffer(uint8_t *buffer) {
     buffer_list_count++;
 }
 
-uint8_t *pop_buffer() {
+uint16_t *pop_buffer() {
     if (buffer_list_count==0) {
         throw std::runtime_error("bufferlist underflow");
     }

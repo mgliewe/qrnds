@@ -1,0 +1,6 @@
+*.o
+*.so
+*.bin
+src/ls-ats
+src/ats-capture
+
