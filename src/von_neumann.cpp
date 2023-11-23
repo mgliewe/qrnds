@@ -4,7 +4,7 @@
 
 
 
-void NeumannDeBias::run() {
+void VonNeumannDebias::run() {
 
     Buffer *out_buffer = get_buffer();
 

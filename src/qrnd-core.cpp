@@ -1,4 +1,4 @@
-#include "producer.h"
+#include "qrnd-core.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -62,7 +62,7 @@ void Semaphore::post() {
 
 
 Runnable::Runnable() 
-    : pid(0), run_state(0)
+    : pid(0), run_state(S_STOPPED)
 {
 }
 
@@ -78,16 +78,16 @@ void Runnable::start() {
 }
 
 void Runnable::stop() {
-    run_state &= ~S_RUNNING;
+    run_state = (enum Runnable::run_state) (run_state & ~S_RUNNING);
 }
 
 void Runnable::pause() {
-    run_state |= ~S_PAUSED;
+    run_state = (enum Runnable::run_state) (run_state | S_PAUSED);
 }
 
 void Runnable::resume() {
     if (run_state & S_PAUSED) {
-        run_state &= ~S_PAUSED;
+        run_state = (enum Runnable::run_state) (run_state & ~S_PAUSED);
         sem.post();
     }
 }
@@ -106,7 +106,7 @@ void Runnable::wait_for() {
 
 /** static **/ void *Runnable::thread_proc(void *ctx) {
     Runnable *runner = static_cast<Runnable *>(ctx);
-    runner->run_state |= S_RUNNING;
+    runner->run_state = (enum Runnable::run_state) (runner->run_state | S_RUNNING);
     runner->run();
     runner->sem.post();
     return 0;
@@ -134,8 +134,8 @@ void Timer::run() {
     }
 }
 
-Interval::Interval(int period) 
-    : tm(period)
+Interval::Interval(int period, void *ctx) 
+    : tm(period), ctx(ctx)
 {
 
 }
@@ -157,8 +157,8 @@ void Interval::run() {
 
 
 
-Buffer::Buffer(Producer &owner, int capacity, value_type *buffer, void(*destruct)(void *)) 
-    : size(0), capacity(capacity), data(buffer), 
+Frame::Frame(Producer &owner, int capacity, value_type *frame, void(*destruct)(void *)) 
+    : count(0), capacity(capacity), data(frame), 
       owner(&owner), 
       link(0), alloc_link(0),
       destruct(destruct)
@@ -169,11 +169,11 @@ Buffer::Buffer(Producer &owner, int capacity, value_type *buffer, void(*destruct
     }
 }
 
-Buffer::~Buffer() {
+Frame::~Frame() {
     destruct(this->data);
 }
 
-void Buffer::give_back() {
+void Frame::give_back() {
     if (owner) {
         owner->take_back(this);
     } else {
@@ -184,25 +184,25 @@ void Buffer::give_back() {
 
 
 
-BufferStream::BufferStream() 
+FrameStream::FrameStream() 
     : _first(0), _last(0)
 {
 }
 
-void BufferStream::append(Buffer *buffer) {
-    assert( buffer!=NULL );
+void FrameStream::enqueue(Frame *frame) {
+    assert( frame!=NULL );
     lock();
     if (_last) {
-        _last->link = buffer;
+        _last->link = frame;
     }
-    _last = buffer;
+    _last = frame;
     Semaphore::post();
     unlock();
 }
 
 
-Buffer *BufferStream::shift(long timeout) {
-    Buffer *b;
+Frame *FrameStream::dequeue(long timeout) {
+    Frame *b;
 
     if (timeout>0) {
         Semaphore::wait(timeout);
@@ -220,19 +220,20 @@ Buffer *BufferStream::shift(long timeout) {
     return b;
 }
 
-Buffer *BufferStream::top() {
-    Buffer *b;
+/*
+Frame *FrameStream::top() {
+    Frame *b;
     lock();
     b = _first;
     unlock();
     return b;
 }
+*/
 
 
-
-Buffer *Consumer::receive() {
+Frame *Consumer::receive() {
     state|=S_RECEIVING; 
-    Buffer *b=input.shift(); 
+    Frame *b=input.dequeue(); 
     state&=S_RECEIVING; 
     return b;
 }
@@ -285,40 +286,40 @@ Producer::~Producer() {
     Node::~Node();
 }
 
-void Producer::add_buffer(Buffer *buffer) {
-    free_buffers.append(buffer);
-    buffer->alloc_link = this->allocated_buffer;
-    this->allocated_buffer = buffer;
+void Producer::add_frame(Frame *frame) {
+    free_buffers.enqueue(frame);
+    frame->alloc_link = this->allocated_buffer;
+    this->allocated_buffer = frame;
 }
 
-Buffer *Producer::get_buffer() {
+Frame *Producer::get_frame() {
     state |= S_STALLED;
-    Buffer *b = free_buffers.shift();
+    Frame *b = free_buffers.dequeue();
     state &= ~S_STALLED;
     return b;
 }
 
-void Producer::send(int channel, Buffer *buffer) {
+void Producer::send(int channel, Frame *frame) {
     assert( channel>=0 );
     assert( channel<num_outputs );
 
     if (output_slots[channel]) {
         state |= S_SENDING;
-        output_slots[channel]->input.append(buffer);
+        output_slots[channel]->input.enqueue(frame);
         state &= ~S_SENDING;
     } else {
-        buffer->give_back();
+        frame->give_back();
     }
 }
 
-void Producer::take_back(Buffer *buffer) {
-    this->free_buffers.append(buffer);
+void Producer::take_back(Frame *frame) {
+    this->free_buffers.enqueue(frame);
 }
 
 void Producer::allocate_buffers(int size, int count) {
     for (int n=0; n<count; ++n) {
-        Buffer *b = new Buffer(*this,size);
-        add_buffer(b);
+        Frame *b = new Frame(*this,size);
+        add_frame(b);
     }
 }
 
@@ -337,7 +338,7 @@ void NullReader::run() {
         }
         if (is_stopped())
             break;
-        Buffer *b = get_buffer();
+        Frame *b = get_frame();
         send(0, b);
     }
 }
@@ -357,65 +358,13 @@ void RandReader::run() {
         }
         if (is_stopped())
             break;
-        Buffer *b = get_buffer();
+        Frame *b = get_frame();
         for (int n=0; n<b->capacity; ++n) {
             b->data[n] = rand_r(&seed);
         }
-        b->size = b->capacity;
+        b->count = b->capacity;
         send(0, b);
     }
-
-}
-
-
-DiskReader::DiskReader(const char *name, const char *filename, int buffersize, int num_buffer) 
-    : Producer(name, 1)
-{
-    allocate_buffers(buffersize, num_buffer);
-
-    fd = open(filename, O_RDONLY);
-    if (fd<0) {
-        throw "canoonot open input file for reading";
-    }
-}
-
-void DiskReader::run() {
-    for (;;) {
-        if (is_paused()) {
-            wait_for_resume();
-        }
-        if (is_stopped())
-            break;
-
-        Buffer *buffer = get_buffer();
-        uint8_t *data = (uint8_t *) buffer->data;
-        int sz = buffer->capacity;
-        while (sz>0) {
-            int len = read(fd,data, sz);
-            if (len<0) {
-                close(fd);
-                stop();
-                break;
-            } 
-            data += len;
-            sz -= len;
-        }
-        buffer->size = data - (uint8_t *)buffer->data;
-        send(0, buffer);
-    }
-}
-
-
-ZeroReader::ZeroReader(const char *name, int buffersize, int num_buffer) 
-    : DiskReader(name, "/dev/zero", buffersize, num_buffer)
-{
-
-}
-
-
-RandomReader::RandomReader(const char *name, int buffersize, int num_buffer) 
-    : DiskReader(name, "/dev/random", buffersize, num_buffer)
-{
 
 }
 
@@ -436,14 +385,14 @@ void StreamMangler::run() {
         if (is_stopped())
             break;
 
-        Buffer *buffer = receive();
+        Frame *frame = receive();
         
         // find next output and emit 
         int n = next_output;
         do {
             // if slot is connected, emit
             if (output_slots[n]) {
-                send(n, buffer);
+                send(n, frame);
                 break;
             } 
             // advance to next slot
@@ -451,9 +400,9 @@ void StreamMangler::run() {
             if (n>num_outputs) {
                 n = 0;
             }
-            // if we reached next_output, there are no connections; just dissmiss buffer
+            // if we reached next_output, there are no connections; just dissmiss frame
             if (n==next_output) {
-                buffer->give_back();
+                frame->give_back();
             }
         } while (n!=next_output);
 

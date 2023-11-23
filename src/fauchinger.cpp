@@ -1,23 +1,13 @@
 
 
-#include "producer.h"
+#include "fauchinger.h"
 
 #include <stdint.h>
-
-class Fauchinger : public Consuner, public Producer, public Runnable {
-private:
-    unsigned N, L;
-    uint64_t *m;
-public:
-    Fauchinger(const char *name, int input_bits = 1024, int output_bits = 768, const char *m_matrix_file = "m_matrix.bin");
-    Fauchinger(std::string name, int input_bits = 1024, int output_bits = 768, const char *m_matrix_file = "m_matrix.bin")
-        : Fauchinger(name.c_str(), input_bits, output_bits) { }
-
-protected:
-    void run();
-
-    void read_m_matrix(const char *filename);
-}
+#include <assert.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 
 /**
@@ -30,7 +20,7 @@ protected:
  * @param out   an output array of L bits stored as L/64 64− bit integers
  * @param m     a random matrix of l∗n bits, stored in L∗N/64 64−bit integers
  */
-static void extract(const unsigned N, uint64_t const *in, , 
+static void extract(const unsigned N, uint64_t const *in, 
                     const unsigned L, uint64_t *out, 
                     uint64_t const *m) {
 
@@ -76,7 +66,7 @@ void Fauchinger::read_m_matrix(const char *filename) {
 
     m = new uint64_t[sz / 8];
 
-    int fd = open(m_file, RD_ONLY);
+    int fd = open(filename, O_RDONLY);
     if (fd<0) {
         throw "cannot open m_matrix_file for reading";
     }
@@ -98,8 +88,8 @@ void Fauchinger::run() {
         if (is_stopped())
             break;
 
-        Buffer *in_buffer = receive();
-        Buffer *out_buffer = get_buffer();
+        Frame *in_buffer = receive();
+        Frame *out_buffer = get_frame();
 
         assert(in_buffer->count <= N/64);
         assert(out_buffer->count <= L/64);

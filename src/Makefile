@@ -1,13 +1,18 @@
 
 
-CXXOPT += -g
+CXXOPT += -g -fPIC
 LXXOPT += -L../lib -lATSApi
 
 
-all: ats-tools
+QRND_FILES = qrnd-core.o qrnd-disk.o fauchinger.o
+
+all: ats-tools qrnd.so # qrnd-test
 
 qrnd-core.o: qrnd-core.cpp qrnd-core.h
 	c++ $(CXXOPT) -c qrnd-core.cpp
+
+qrnd-disk.o: qrnd-disk.cpp qrnd-disk.h qrnd-core.h
+	c++ $(CXXOPT) -c qrnd-disk.cpp
 
 fauchinger.o: fauchinger.cpp fauchinger.h qrnd-core.h
 	c++ $(CXXOPT) -c fauchinger.cpp
@@ -15,9 +20,15 @@ fauchinger.o: fauchinger.cpp fauchinger.h qrnd-core.h
 von_neumann.o: von_neumann.cpp von_neumann.h qrnd-core.h
 	c++ $(CXXOPT) -c von_neumann.cpp
 
-qrnd.so: qrnd-core.o fauchinger.o von_neumann.o
+qrnd.so: $(QRND_FILES)
 	c++ $(CXXOPT) -o qrnd.so -shared \
-		qrnd-core.o fauchinger.o von_neumann.o \ 
+		$(QRND_FILES) \
+		$(LXXOPT)
+
+
+qrnd-test: $(QRND_FILES) qrnd-test.o
+	c++ $(CXXOPT) -o qrnd-test \
+		$(QRND_FILES) qrnd-test.o \
 		$(LXXOPT)
 
 

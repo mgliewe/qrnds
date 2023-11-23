@@ -35,8 +35,16 @@ bool in_memory = false;
 bool test_mode = false;
 unsigned record_size = 8 * 1024;
 unsigned record_count = 1024;
+
+bool extract_entropy = false;
+unsigned extract_inbits = 2048;
+unsigned extract_outbits = 2048;
+char *extract_seedfile = 0;
+
+bool write_histogram = false;
+
 char *pyxdatfile = NULL;
-bool start_pyxplot = false;
+
 
 ATS::Board *board = 0;
 
@@ -44,8 +52,6 @@ ATS::Board *board = 0;
 void init_buffer_list(int count);
 void push_buffer(uint16_t *buffer);
 uint16_t *pop_buffer();
-
-
 
 enum options {
     OPT_NULL = 0,
@@ -67,6 +73,11 @@ enum options {
     OPT_PYXPLOT,
     OPT_LIST_RATES,
     OPT_LIST_RANGES,
+    OPT_EXTRACT,
+    OPT_INBITS,
+    OPT_OUTBITS,
+    OPT_SEEDFILE,
+    OPT_HISTOGRAM,
     OPT_LAST
 };
 
@@ -92,13 +103,19 @@ struct option long_options[] = {
     { "eight-bit",      no_argument,        0, OPT_EIGHT_BIT },
     { "pack",           no_argument,        0, OPT_PACK },
 
+    { "extract-entropy", no_argument,       0, OPT_EXTRACT },
+    { "in-bit-count",   required_argument,  0, OPT_INBITS },
+    { "out-bit-count",  required_argument,  0, OPT_OUTBITS },
+    { "seed-file",      required_argument,  0, OPT_SEEDFILE },
+    { "histogram",      required_argument,  0, OPT_HISTOGRAM },
+
     { "pyxplot",        optional_argument,  0, OPT_PYXPLOT },
 
     { NULL, 0, 0, 0 }
 
 };
 
-const char *short_options = "hvc:o:i:D:C:R:28pmtr:n:y::";
+const char *short_options = "hvf:o:i:D:C:R:28pmtr:n:y::";
 
 void help()  {
     cerr << "usage: " << progname << " <options>" << endl
@@ -108,7 +125,8 @@ void help()  {
          << "\t--help, -h                show this help" << endl
          << "\t--verbose, -v             verbose output" << endl 
 
-         << "\t--config=<file>, -c       read configuration from <file>" << endl
+         << "\t--config=<file>, -f       read configuration from <file>" << endl
+         << "\t--write-config=<file>     write used configuration to <file>" << endl
 
          << "\t--output=<file>, -o       write data to <file>, use '-' for stdout" << endl
          << "\t--input=<file>, -i        read from file instead of capturing" << endl
@@ -123,6 +141,13 @@ void help()  {
          << "\t--test, -t                just read data, dont write to disk" << endl
          << "\t--record-size=<n>, -r     record size, default: 1024 samples" << endl
          << "\t--record-count=<n>, -n    record count, use 0 for unlimited. Default: 0" << endl
+
+         << "\t--extract-entropy         extract entropy using toeplitz matrix" << endl
+         << "\t--in-bit-count=<n>        number of input bits for --extract-entropy. Default: 2048" << endl
+         << "\t--out-bit-count=<n>       number of output bits for --extract-entropy. Default: 768" << endl
+         << "\t--seed-file=<file>        random seed used for --extract-entropy" << endl
+
+         << "\t--histogram               output value distribution diagram instread of data" << endl
 
          << "\t--list-ranges             show supported input voltage ranges" << endl
          << "\t--list-rates              show supported samplerates" << endl
@@ -316,6 +341,31 @@ void process_option(int short_option, const char *optarg) {
             break;
         }
 
+        case OPT_EXTRACT: {
+            extract_entropy = true;
+            break;
+        }
+
+        case OPT_INBITS: {
+            extract_inbits = to_number(optarg);
+            break;
+        }
+
+        case OPT_OUTBITS: {
+            extract_outbits = to_number(optarg);
+            break;
+        }
+
+        case OPT_SEEDFILE: {
+            extract_seedfile = strdup(optarg);
+            break;
+        }
+
+        case OPT_HISTOGRAM: {
+            write_histogram = true;
+            break;
+        }
+
         case 'y': 
         case OPT_PYXPLOT: {
             if (optarg && *optarg) {
@@ -476,8 +526,6 @@ void write_config(std::ostream &out) {
         out << "pack";
     if (pyxdatfile)
         out << "pxplot " << pyxdatfile << endl;
-    if (start_pyxplot)
-        out << "pxplot-start " << endl;
 }
 
 

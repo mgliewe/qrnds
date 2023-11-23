@@ -7,6 +7,10 @@
  * 
  */
 
+#ifndef __QRND_CORE_H__
+#define __QRND_CORE_H__
+
+#pragma once
 
 #include <string>
 #include <vector>
@@ -17,9 +21,7 @@
 #include <math.h>
 
 
-
-
-typedef uint16_t value_type;
+typedef int16_t value_type;
 
 // timeout multiplier
 const int SEC = 1000000000;
@@ -97,9 +99,12 @@ private:
     Semaphore sem;
 
 protected:
-    enum {
+    enum run_state {
+        S_STOPPED = 0,
         S_RUNNING = 1,
-        S_PAUSED = 2
+        S_PAUSED = 2,
+
+        S_MASK_RUNNING = ~1
     } run_state;
 
     enum task_priorities {
@@ -183,7 +188,9 @@ private:
     Timer tm;
     void *ctx;
 public:
-    Interval(int period, void ctx);
+    /** create an Inervall task */
+    Interval(int period, void *ctx);
+    /** perform interval action */
     virtual void action() = 0;
 
 protected:
@@ -200,23 +207,29 @@ protected:
  * After processing the data the Consumer gives the Frame back to the
  * owning Producer for reuse.
  * 
- * Buffers are passed between Producer/Consumer via BufferStreams. 
+ * Buffers are passed between Producer/Consumer via FrameStreams. A Frame
+ * can be assigned to at most one FrameStream at a givewn time.  
  */
 struct Frame {
+    friend class FrameStream;       // grant access to link
+    friend class Producer;           // grant access to alloc_link
 
 protected:
     Producer *owner;        
-    Frame *link;                   // used for Fifos and Lists
-    Frame *alloc_link;             // used to keep a list of all allocated buffers
-    void (*destruct)(void *);      // free() function for data
+    Frame *link;                    // used for Fifos and Lists
+    Frame *alloc_link;              // used to keep a list of all allocated buffers
+    void (*destruct)(void *);       // free() function for data
 
 public:
-    int count;
-    int capacity;
-    value_type *data;
+    int count;                      ///< the number of datapoints in this Frame 
+    int capacity;                   ///< the capacity (max no of datapoints)
+    value_type *data;               ///< the actual data
 
+    /** create a Frame */
     Frame(Producer &owner, int capacity, value_type *Frame = 0, void(*destruct)(void *) = 0);
+    /** release a Frame */
     ~Frame();
+    /** give back te Frame to its original owner */
     void give_back();
 };
 
@@ -224,21 +237,40 @@ public:
 /**
  * A classic Fifo, used to pass Buffers between Producer and Consumer.
  * 
- * 
+ * @see Frame
  */
 class FrameStream : protected Lockable, protected Semaphore {
     Frame * _first;
     Frame * _last;
 
 public:
-    FrameStream();
 
+    /** create a FrameStream */
+    FrameStream();
+    /** release a FrameStream */
+    ~FrameStream();
+
+    /** post a Frame to the stream */
     void enqueue(Frame *);
+    /** receive a Frame from the stream 
+     *  @param timeout      timeout in nanoseconds
+     *  @return             the next Frame
+     */
     Frame *dequeue(long timeout);
+    /** receive a Frame from the stream 
+     *  @return             the next Frame
+     */
     Frame *dequeue() {
         return dequeue(0);
     }
-    Frame *top();
+
+    /** mark the end of the FrameStream. After depletion
+     *  of the remaining frames in the stream, subsequent
+     *  call to dequeue() will return NULL
+    */
+    void close();
+
+//    Frame *top();
 };
 
 
@@ -267,7 +299,7 @@ public:
         : frame(out),
         data(0), bit_count(0) 
     {
-        pout = frame.data;
+        pout = frame->data;
         data_mask = HS_BIT;
     }
 
@@ -279,7 +311,7 @@ public:
      */
     bool emit(int bit) {
         if (bit)
-            data |= bitmask;
+            data |= data_mask;
         data_mask >>= 1;
         bit_count++;
 
@@ -389,6 +421,9 @@ public:
 
     virtual void on_tick() { }
 
+    static void start_all();
+    static void stop_all();
+
 };
 
 
@@ -467,8 +502,54 @@ public:
 
 
     void allocate_buffers(int size, int count);
+
+
+    class Producer_Pipe {
+    public:
+        Producer &producer;
+        int channel;
+        Producer_Pipe(Producer &p, int n)  : producer(p), channel(0) { }
+    };
+
+    Producer_Pipe operator [](int n) {
+        return Producer_Pipe(*this, n);
+    }
 };
 
+
+class Filter : public Consumer, public Producer {
+public:
+    Filter(const char *name);
+    ~Filter();
+};
+
+inline Producer &operator >>(Producer & p, Filter &c) {
+    p.connect_output(0, c);
+    return (c);
+}
+
+inline void operator >>(Producer & p, Consumer &c) {
+    p.connect_output(0, c);
+}
+
+inline Producer &operator >>(Producer::Producer_Pipe p, Filter &c) {
+    p.producer.connect_output(p.channel, c);
+    return (c);
+}
+
+inline void operator >>(Producer::Producer_Pipe p, Consumer &c) {
+    p.producer.connect_output(p.channel, c);
+}
+
+
+class StreamSplitter : public Filter, public Runnable {
+
+protected:
+    void run();
+public:
+    StreamSplitter(const char *name, int num_outputs = 2);
+    ~StreamSplitter();
+};
 
 /**
  * A producer producing all zeros
@@ -498,42 +579,6 @@ public:
 };
 
 
-/**
- * A producer reading from disk
- */
-class DiskReader : public Producer, public Runnable {
-private:
-    int fd;
-protected:
-    void run();
-public:
-    DiskReader(const char *name, const char *filename, int buffersize = 8*K, int num_buffer = 8);
-    DiskReader(std::string &name, const char *filename, int buffersize = 8*K, int num_buffer = 8)
-        : DiskReader(name.c_str(), filename, buffersize, num_buffer) { }
-};
-
-
-/**
- * A producer reading from /dev/zero
- */
-class ZeroReader : public DiskReader {
-public:
-    ZeroReader(const char *name, int buffersize = 8*K, int num_buffer = 8);
-    ZeroReader(std::string &name, int buffersize = 8*K, int num_buffer = 8)
-        : ZeroReader(name.c_str(), buffersize, num_buffer) { }
-
-};
-
-/**
- * A producer reading from /dev/random
- */
-class RandomReader : public DiskReader {
-public:
-    RandomReader(const char *name, int buffersize = 8*K, int num_buffer = 8);
-    RandomReader(std::string &name, int buffersize = 8*K, int num_buffer = 8)
-        : RandomReader(name.c_str(), buffersize, num_buffer) { }
-};
-
 
 /**
  * A consumer that does nothing
@@ -547,34 +592,6 @@ public:
 protected:
     /** the thread runner for a NoMangler */
     void run();
-};
-
-/**
- * A consumer, writing data to disk.
- */
-class DiskWriter : public Consumer, public Runnable {
-public:
-    /** create a DiskWriter
-     *  @param name         the name of the Consumer
-     *  @param filename     the file to write data to
-    */
-    DiskWriter(const char *name, const char *filename);
-    DiskWriter(std::string &name, const char *filename) 
-        : DiskWriter(name.c_str(), filename) { }
-protected:
-    /** the thread runner for a DiskWriter */
-    void run();
-};
-
-/**
- * A consumer, writing data to /dev/null.
- */
-class NullWriter : public DiskWriter {
-public:
-    /** create a NullWriter */
-    NullWriter(const char *name);
-    NullWriter(std::string &name) 
-        : NullWriter(name.c_str()) { }
 };
 
 
@@ -609,3 +626,4 @@ protected:
 
 
 
+#endif // __QRND_CORE_H__
