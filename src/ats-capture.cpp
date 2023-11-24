@@ -1,11 +1,12 @@
 #include <getopt.h>
 #include <iostream>
+#include <fstream>
 #include <cstring>
 
 #include <unistd.h>
 #include <sys/fcntl.h>
 #include <sys/mman.h>
-
+#include <assert.h>
 
 #include "ATS-SDK.h"
 
@@ -14,14 +15,13 @@ using std::cerr;
 using std::endl;
 
 
-
-const char *progname;
+const char *progname = NULL;
 int verbose = 1;
 
 char *infile = NULL;
 char *outfile = NULL;
 
-
+char *config_file = NULL;
 
 int system_id = 1;
 int board_id = 1;
@@ -31,6 +31,7 @@ int input_range = 1250;
 int input_quadrant = 0;
 bool eigth_bit = false;
 bool pack_12_bit = false;
+bool drop_frames = false;
 bool in_memory = false;
 bool test_mode = false;
 unsigned record_size = 8 * 1024;
@@ -38,10 +39,11 @@ unsigned record_count = 1024;
 
 bool extract_entropy = false;
 unsigned extract_inbits = 2048;
-unsigned extract_outbits = 2048;
+unsigned extract_outbits = 1152;
 char *extract_seedfile = 0;
 
 bool write_histogram = false;
+bool histogram_binbits = 12;
 
 char *pyxdatfile = NULL;
 
@@ -53,10 +55,20 @@ void init_buffer_list(int count);
 void push_buffer(uint16_t *buffer);
 uint16_t *pop_buffer();
 
+extern "C" uint64_t builtin_extract_seed[];
+extern "C" unsigned builtin_extract_seed_bits;
+
+void extract(const unsigned N, uint64_t const *in, 
+                    const unsigned L, uint64_t *out, 
+                    uint64_t const *m);
+
 enum options {
     OPT_NULL = 0,
     OPT_HELP,
     OPT_VERBOSE,
+    OPT_QUIET,
+    OPT_READ_CONFIG,
+    OPT_WRITE_CONFIG,
     OPT_OUTPUT,
     OPT_INPUT,
     OPT_IN_MEMORY,
@@ -70,6 +82,7 @@ enum options {
     OPT_INPUT_RANGE,
     OPT_EIGHT_BIT,
     OPT_PACK,
+    OPT_DROPFRAMES,
     OPT_PYXPLOT,
     OPT_LIST_RATES,
     OPT_LIST_RANGES,
@@ -78,12 +91,18 @@ enum options {
     OPT_OUTBITS,
     OPT_SEEDFILE,
     OPT_HISTOGRAM,
+    OPT_BINBITS,
     OPT_LAST
 };
 
 struct option long_options[] = {
     { "help",           no_argument,        0, OPT_HELP },
     { "verbose",        optional_argument,  0, OPT_VERBOSE },
+    { "quiet",          no_argument,        0, OPT_QUIET },
+
+    { "config",         required_argument,  0, OPT_READ_CONFIG },
+    { "write-config",   required_argument,  0, OPT_WRITE_CONFIG },
+
     { "list-rates",     no_argument,        0, OPT_LIST_RATES },
     { "list-ranges",    no_argument,        0, OPT_LIST_RANGES },
 
@@ -102,6 +121,7 @@ struct option long_options[] = {
 
     { "eight-bit",      no_argument,        0, OPT_EIGHT_BIT },
     { "pack",           no_argument,        0, OPT_PACK },
+    { "drop-frames",    no_argument,        0, OPT_DROPFRAMES },
 
     { "extract-entropy", no_argument,       0, OPT_EXTRACT },
     { "in-bit-count",   required_argument,  0, OPT_INBITS },
@@ -123,7 +143,8 @@ void help()  {
 
          << "options:" << endl
          << "\t--help, -h                show this help" << endl
-         << "\t--verbose, -v             verbose output" << endl 
+         << "\t--verbose=<level>, -v     verbose output. Use -vv to be even most verbose." << endl 
+         << "\t--quiet, -q               no diagnostic output. Same as --verbose=0." << endl
 
          << "\t--config=<file>, -f       read configuration from <file>" << endl
          << "\t--write-config=<file>     write used configuration to <file>" << endl
@@ -141,13 +162,15 @@ void help()  {
          << "\t--test, -t                just read data, dont write to disk" << endl
          << "\t--record-size=<n>, -r     record size, default: 1024 samples" << endl
          << "\t--record-count=<n>, -n    record count, use 0 for unlimited. Default: 0" << endl
+         << "\t--drop-frames             ignore buffer-overflow errors while capturing" << endl 
 
          << "\t--extract-entropy         extract entropy using toeplitz matrix" << endl
          << "\t--in-bit-count=<n>        number of input bits for --extract-entropy. Default: 2048" << endl
-         << "\t--out-bit-count=<n>       number of output bits for --extract-entropy. Default: 768" << endl
+         << "\t--out-bit-count=<n>       number of output bits for --extract-entropy. Default: 1152" << endl
          << "\t--seed-file=<file>        random seed used for --extract-entropy" << endl
 
          << "\t--histogram               output value distribution diagram instread of data" << endl
+         << "\t--bin-bits                number of highest significant bits for --histogram. Default: 12" << endl
 
          << "\t--list-ranges             show supported input voltage ranges" << endl
          << "\t--list-rates              show supported samplerates" << endl
@@ -263,13 +286,48 @@ void process_option(int short_option, const char *optarg) {
 
         case 'v': 
         case OPT_VERBOSE: {
-            verbose ++;
+            if (optarg && *optarg) {
+                switch (*optarg) {
+                case '0':       verbose = 0; break;
+                case '1':       verbose = 1; break;
+                case '2':       verbose = 2; break;
+                case '3':       verbose = 3; break;
+                case 'v':       verbose = 3; break;
+                default:
+                    throw std::runtime_error("verbose level must be between 0 and 3");
+                }
+            } else {
+                verbose ++;
+            }
+            break;
+        }
+
+        case OPT_READ_CONFIG: {
+            void read_config(const char *file);
+            read_config(optarg);
+            break;
+        }
+
+        case OPT_WRITE_CONFIG: {
+            config_file = strdup(optarg);
+
+            int ret = access(config_file, R_OK);
+            if (ret) {
+                throw std::runtime_error("cannot create config file: "+std::string(strerror(errno)));
+            }
+            
             break;
         }
 
         case 'i': 
         case OPT_INPUT: {
             infile = strdup(optarg);
+            if (strcmp(outfile, "-") != 0) {
+                int ret = access(extract_seedfile, R_OK);
+                if (ret) {
+                    throw std::runtime_error("cannot locate input file: "+std::string(strerror(errno)));
+                }
+            }
             break;
         }
 
@@ -282,6 +340,12 @@ void process_option(int short_option, const char *optarg) {
         case 'o': 
         case OPT_OUTPUT: {
             outfile = strdup(optarg);
+            if (strcmp(outfile, "-") != 0) {
+                int ret = access(extract_seedfile, R_OK);
+                if (ret) {
+                    throw std::runtime_error("cannot create output file: "+std::string(strerror(errno)));
+                }
+            }
             break;
         }
 
@@ -299,8 +363,7 @@ void process_option(int short_option, const char *optarg) {
                 case '1': case 'b': case 'B':
                     channel = 2; break;
                 default:
-                    usage(); 
-                    exit(0);
+                    throw std::runtime_error("Bad channel: " + std::string(optarg));
             }
             break;
         }
@@ -308,12 +371,20 @@ void process_option(int short_option, const char *optarg) {
         case '8': 
         case OPT_EIGHT_BIT: {
             eigth_bit = true;
+            if (pack_12_bit) {
+                throw std::runtime_error("--eight-bit and --pack are mutual exclusive");
+            }
             break;
         }
 
         case 'p': 
         case OPT_PACK: {
             pack_12_bit = true;
+            break;
+        }
+
+        case OPT_DROPFRAMES: {
+            drop_frames = true;
             break;
         }
 
@@ -358,11 +429,23 @@ void process_option(int short_option, const char *optarg) {
 
         case OPT_SEEDFILE: {
             extract_seedfile = strdup(optarg);
+            int ret = access(extract_seedfile, R_OK);
+            if (ret) {
+                throw std::runtime_error("cannot locate seedfile: "+std::string(strerror(errno)));
+            }
             break;
         }
 
         case OPT_HISTOGRAM: {
             write_histogram = true;
+            break;
+        }
+
+        case OPT_BINBITS: {
+            histogram_binbits = to_number(optarg);
+            if (histogram_binbits<4 || histogram_binbits>12) {
+                throw std::runtime_error("bin-bits bust be between 4 and 12.");
+            }
             break;
         }
 
@@ -384,6 +467,11 @@ void process_option(int short_option, const char *optarg) {
                 pyxdatfile = (char *) malloc(len+4+1);
                 strncpy(pyxdatfile, outfile, len);
                 strcat(pyxdatfile, ".dat");
+
+                int ret = access(extract_seedfile, W_OK);
+                if (ret) {
+                    throw std::runtime_error("cannot create .dat-file: "+std::string(strerror(errno)));
+                }
             }
             break;
         }
@@ -503,7 +591,8 @@ void read_config(const char *file) {
     }
 }
 
-void write_config(std::ostream &out) {
+void write_config(const char *filename) {
+    std::fstream out = std::fstream(filename, std::fstream::out);
     if (outfile)
         out << "output " << outfile << endl;
     if (infile)
@@ -524,8 +613,24 @@ void write_config(std::ostream &out) {
         out << "eight-bit" << endl;
     if (pack_12_bit)
         out << "pack";
+    if (drop_frames) {
+        out << "drop-frames" << endl;
+    }
+    if (extract_entropy) {
+        out << "extract-entropy" << endl;
+        out << "in-bit-count " << extract_inbits << endl;
+        out << "out-bit-count " << extract_outbits << endl;
+        out << "seed-file " << extract_seedfile << endl;
+    }
+
+    if (write_histogram) {
+        out << "histogram" << endl;
+    }
+
     if (pyxdatfile)
         out << "pxplot " << pyxdatfile << endl;
+
+    out.close();
 }
 
 
@@ -563,10 +668,33 @@ int main(int argc, char * const argv[]) {
         cerr << "FATAL: cannot pre-allocate memory in continous streaming mode." << endl;
     }
 
+    if (extract_entropy) {
+        if (extract_inbits<extract_outbits) {
+            throw std::runtime_error("--out-bit-count must be less or equal --in-bit-count");
+        }
+        if (extract_inbits == 0 || extract_inbits%64 != 0) {
+            throw std::runtime_error("--in-bit-count must be dividable by 64");
+        }
+        if (extract_outbits == 0 || extract_outbits%64 != 0) {
+            throw std::runtime_error("--out-bit-count must be dividable by 64");
+        }
+        if (record_size < extract_inbits) {
+            throw std::runtime_error("--in-bit-count must be less than --record-size");
+        }
+        if (record_size%extract_inbits != 0) {
+            throw std::runtime_error("--record_size must be dividable by --in-bit-count");
+        }
+    }
+
     if (verbose>1) {
-        if (infile) 
-            cerr << "reading data from " << infile << endl;
-        else {
+        if (infile) {
+            cerr << "Reading data from ";
+            if (strcmp(infile, "-")==0)
+                cerr << "stdin";
+            else
+                cerr << infile;
+            cerr << "." << endl;
+        } else {
             static const char * const channel_names[] = {
                 "none", "A", "B", "A+B"
             };
@@ -596,7 +724,7 @@ int main(int argc, char * const argv[]) {
             cerr << "Running in test-mode." << endl;
         }
         if (outfile) {
-            if (*outfile == '-')
+            if (strcmp(outfile, "-")==0)
                 cerr << "streaming to stdout." << endl;
             else
                 cerr << "writing data to " << outfile << "." << endl;
@@ -607,6 +735,9 @@ int main(int argc, char * const argv[]) {
         }        
     }
 
+    if (config_file) {
+        write_config(config_file);
+    }
 
     // allocate buffer
     uint8_t *memory_buffer;
@@ -615,36 +746,33 @@ int main(int argc, char * const argv[]) {
     if (pack_12_bit)
         buffer_size * 2 / 3; 
 
+
+    uint16_t **in_memory_buffers = NULL;
+    uint16_t **in_memory_p = NULL;
     if (in_memory) {
         num_buffers = record_count;
+        in_memory_p = in_memory_buffers = (uint16_t **) calloc(sizeof (uint16_t *), num_buffers);
     }
 
-    uint16_t **buffers = (uint16_t **) calloc(sizeof (uint16_t *), num_buffers);
+    init_buffer_list(num_buffers);
 
+    // open disk files
     int in_fd = -1, out_fd = -1;
     FILE *dat_fd = NULL;
 
-    if (!test_mode) {
-        out_fd = open(outfile, O_WRONLY|O_CREAT|O_TRUNC, 0666);
-        if (out_fd<0) {
-            throw std::runtime_error("failed to create output file " + std::string(outfile) + ": " + std::string(strerror(errno)));
-        }
-    }
 
-    if (infile) {
+    if (infile) {       // open input file and allocate buffers
         in_fd = open(infile, O_RDONLY);
         if (!in_fd) {
             throw std::runtime_error(std::string("cannot open ") + infile + " for reading: " + std::string(strerror(errno)));
         }
 
-        init_buffer_list(num_buffers);
         for (int n=0; n<num_buffers; ++n) {
             uint16_t *buffer = (uint16_t *) malloc(buffer_size);
             push_buffer(buffer);
-            buffers[n] = buffer;
         }   
  
-    } else {
+    } else {            // open capture device
         try {
             board = new ATS::Board(system_id, board_id);
 
@@ -671,12 +799,10 @@ int main(int argc, char * const argv[]) {
                 ADMA_CONTINUOUS_MODE | ADMA_FIFO_ONLY_STREAMING | ADMA_EXTERNAL_STARTCAPTURE
             );
 
-            init_buffer_list(num_buffers);
             for (int n=0; n<num_buffers; ++n) {
                 uint16_t *buffer = board->alloc_buffer(buffer_size);
                 board->post_async_buffer(buffer, buffer_size);
                 push_buffer(buffer);
-                buffers[n] = buffer;
             }   
 
             board->start_capture();
@@ -687,8 +813,46 @@ int main(int argc, char * const argv[]) {
         }
     }
 
+    if (outfile) {      // open output file
+        out_fd = open(outfile, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+        if (out_fd<0) {
+            throw std::runtime_error("failed to create output file " + std::string(outfile) + ": " + std::string(strerror(errno)));
+        }
+    }
+
     // capture data
     int dat_counter = 1;    // datapoint counter for pyxplot
+    int dat_increment = 1;
+
+    unsigned *histogram;
+    unsigned histogram_shift = 0;
+    if (write_histogram) {
+        if (eigth_bit) {
+            unsigned histogram_size = 0x0100;
+            if (histogram_binbits<8) {
+                for (int n=8; n>histogram_binbits; --n) {
+                    histogram_shift++;
+                    dat_increment <<= 1;
+                    histogram_size >>= 1;
+                }
+                histogram = (unsigned *) calloc(sizeof(unsigned), histogram_size);
+            } 
+            histogram = (unsigned *) calloc(sizeof(unsigned), 0x0100);
+            dat_counter = -0x0080;
+        } else {
+            unsigned histogram_size = 0x1000;
+            if (histogram_binbits<12) {
+                for (int n=12; n>histogram_binbits; --n) {
+                    histogram_shift++;
+                    dat_increment <<= 1;
+                    histogram_size >>= 1;
+                }
+            }
+            histogram = (unsigned *) calloc(sizeof(unsigned), 0x1000);
+            dat_counter = -0x0800;
+        }
+    }
+
     uint16_t *buffer;
     for (int rec=0; record_count==0 || rec<record_count; ++rec) {
         if (in_fd>=0) {
@@ -717,77 +881,101 @@ int main(int argc, char * const argv[]) {
             } while (ret!=ApiSuccess);
         }
 
-        if (!test_mode && !in_memory) {
+        int output_size = buffer_size;
+
+        if (in_memory) {
+            *in_memory_p++ = buffer;
+
+        } else {
+            if (extract_entropy) {
+
+            }
+            
+            if (write_histogram) {
+                if (eigth_bit) {
+                    int8_t * dat = (int8_t *) buffer;
+                    for (int i=0; i<output_size; i+=2) {
+                        int32_t v = *dat;
+                        v += 0x0800;
+                        v &= 0x0fff;
+                        v >>= histogram_shift;
+                        histogram[v] ++;
+                    }
+                } else if (pack_12_bit) {
+                    uint8_t * dat = (uint8_t *) buffer;
+                    for (int i=0; i<output_size; i+=3) {
+                        int32_t a = (*dat++) << 4;
+                        int32_t x = *dat++;
+                        int32_t b = *dat++;
+                        a |= (x>>4) & 0x000f;
+                        b |= (x<<8) & 0x0f00;
+                        a += 0x0800;
+                        a &= 0x0fff;
+                        a >>= histogram_shift;
+                        histogram[a] ++;
+                        b += 0x0800;
+                        b &= 0x0fff;
+                        b >>= histogram_shift;
+                        histogram[b] ++;
+                    }
+                } else {
+                    uint16_t * dat = (uint16_t *)buffer;
+                    for (int i=0; i<output_size; i+=2) {
+                        int v = *dat;
+                        v += 0x0800;
+                        v &= 0xfff;
+                        v >>= histogram_shift;
+                        histogram[v] ++;
+                    }
+                }
+            }
+        }
+
+        if (!test_mode && !write_histogram && !in_memory) {
             if (out_fd>=0) {
                 fprintf(stderr, "%d\r", rec); fflush(stderr);
-                if (write(out_fd, buffer, buffer_size) != buffer_size) {
+                if (write(out_fd, buffer, output_size) != output_size) {
                     throw std::runtime_error("error on write to outfile: " + std::string(strerror(errno)));
                 }
             }
             if (dat_fd) {
                 if (eigth_bit) {
                     uint8_t * dat = (uint8_t *) buffer;
-                    for (int i=0; i<record_count; ++i) {
-                        fprintf(dat_fd, "%d   %d\n", dat_counter++, *dat++);
+                    for (int i=0; i<output_size; i+=2) {
+                        fprintf(dat_fd, "%d   %d\n", dat_counter, *dat++);
+                        dat_counter += dat_increment;
                     }
                 } else if (pack_12_bit) {
                     uint8_t * dat = (uint8_t *) buffer;
-                    for (int i=0; i<record_count; ++i) {
-                        unsigned a = (*dat++) << 4;
-                        unsigned x = *dat++;
-                        unsigned b = *dat++;
+                    for (int i=0; i<output_size; i+=3) {
+                        int32_t a = (*dat++) << 4;
+                        int32_t x = *dat++;
+                        int32_t b = *dat++;
                         a |= (x>>4) & 0x000f;
                         b |= (x<<8) & 0x0f00;
-                        fprintf(dat_fd, "%d   %d\n", dat_counter++, a);
-                        fprintf(dat_fd, "%d   %d\n", dat_counter++, b);
+                        fprintf(dat_fd, "%d   %d\n", dat_counter, a);
+                        dat_counter += dat_increment;
+                        fprintf(dat_fd, "%d   %d\n", dat_counter, b);
+                        dat_counter += dat_increment;
                     }
                 } else {
                     uint16_t * dat = (uint16_t *)buffer;
-                    for (int i=0; i<record_count; ++i) {
-                        fprintf(dat_fd, "%d   %d\n", dat_counter++, *dat++);
+                    for (int i=0; i<output_size; i+=2) {
+                        fprintf(dat_fd, "%d   %d\n", dat_counter, *dat++);
+                        dat_counter += dat_increment;
                     }
                 }
             }
         }
+
         push_buffer(buffer);
         if (in_fd<0) 
             board->post_async_buffer(buffer, buffer_size);
     }
 
     if (in_memory) {
-        uint8_t *p = memory_buffer;
-        int dat_counter = 1;
-        for (int rec=0; rec<record_count; ++rec) {
-            if (out_fd>=0) {
-                if (write(out_fd, p, buffer_size) != buffer_size) {
-                    cerr << "FATAL: error on write to outfile" << endl;
-                }
-            }
-            if (dat_fd) {
-                if (eigth_bit) {
-                    uint8_t * dat = p;
-                    for (int i=0; i<record_count; ++i) {
-                        fprintf(dat_fd, "%d   %d\n", dat_counter++, *dat++);
-                    }
-                } else if (pack_12_bit) {
-                    uint8_t * dat = p;
-                    for (int i=0; i<record_count; ++i) {
-                        unsigned a = (*dat++) << 4;
-                        unsigned x = *dat++;
-                        unsigned b = *dat++;
-                        a |= (x>>4) & 0x000f;
-                        b |= (x<<8) & 0x0f00;
-                        fprintf(dat_fd, "%d   %d\n", dat_counter++, a);
-                        fprintf(dat_fd, "%d   %d\n", dat_counter++, b);
-                    }
-                } else {
-                    uint16_t * dat = (uint16_t *) p;
-                    for (int i=0; i<record_count; ++i) {
-                        fprintf(dat_fd, "%d   %d\n", dat_counter++, *dat++);
-                    }
-                }
-            }
-        }
+        // write collected data frames
+        //TODO: implement
     }
 
     if (!infile)
@@ -798,6 +986,46 @@ int main(int argc, char * const argv[]) {
     if (out_fd>=0) close(out_fd);
     if (dat_fd) fclose(dat_fd);
 
+}
+
+void write_buffer(uint8_t *data, unsigned size) {
+
+}
+
+
+
+void extract(const unsigned N, uint64_t const *in, 
+                    const unsigned L, uint64_t *out, 
+                    uint64_t const *m) {
+
+    assert ( N%64==0 && L%64==0 ) ;
+
+    // ???? what does that constant really mean?
+    const uint64_t CONSTANT_MASK = 0x1111111111111111UL;
+    // ???? where does that constant come from?
+    const unsigned CONSTANT_RSHIFT = 60; 
+
+    int ind = 0;
+    // perform a matrix−vector multiplication by looping over all rows
+    // the outer loop over all words
+    for (int i = 0 ; i < L/64; ++i) {
+        out[i] = 0;
+        // the inner loop over all bits in the word
+        for (unsigned j = 0 ; j < 64; ++j ) {
+            uint64_t parity = m[ind++] & in[0];
+            // perform a vector − vector multiplication using bit operations
+            for (unsigned k = 1 ; k < N / 64; ++k )
+                parity ^= m[ind++] & in[k];
+
+            // finally obtain the bit parity
+            parity ^= parity >> 1;
+            parity ^= parity >> 2;
+            parity = ( parity & CONSTANT_MASK ) * CONSTANT_MASK;
+
+            // and set the j−th output bit of the i−th output word
+            out[i] |= ((parity >> CONSTANT_RSHIFT) & 1) << j;       
+        }
+    }
 }
 
 uint16_t **buffer_list;

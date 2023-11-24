@@ -1,6 +1,10 @@
 *.o
 *.so
 *.bin
+!src/std-seed.bin
 src/ls-ats
 src/ats-capture
+src/bin2seed
+src/std-seed.c
+
 
