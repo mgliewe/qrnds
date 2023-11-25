@@ -6,6 +6,10 @@
 #include <unistd.h>
 #include <sys/fcntl.h>
 #include <sys/mman.h>
+#include <signal.h>
+#include <time.h>
+#include <sys/time.h>
+
 #include <assert.h>
 
 #include "ATS-SDK.h"
@@ -20,6 +24,7 @@ int verbose = 1;
 
 char *infile = NULL;
 char *outfile = NULL;
+char *histogram_file = NULL;
 
 char *config_file = NULL;
 
@@ -42,25 +47,48 @@ unsigned extract_inbits = 2048;
 unsigned extract_outbits = 1152;
 char *extract_seedfile = 0;
 
+uint64_t *extract_seed = NULL;
+uint64_t *extract_buffer = NULL;
+
 bool write_histogram = false;
 bool histogram_binbits = 12;
+unsigned long *histogram = NULL;
+unsigned histogram_size = 0x1000;
+unsigned histogram_shift = 0;
 
 char *pyxdatfile = NULL;
 
 
 ATS::Board *board = 0;
 
+bool interrupted = false;
+
 /** a ring-list of buffers */
 void init_buffer_list(int count);
 void push_buffer(uint16_t *buffer);
 uint16_t *pop_buffer();
 
+/** external M-matrix for extract() function */
 extern "C" uint64_t builtin_extract_seed[];
+/** number of entropy bits in M-matrix */
 extern "C" unsigned builtin_extract_seed_bits;
 
+// write data points to pyxplot file
+void write_dat(FILE *fd, uint16_t *buffer, unsigned size, int &dat_counter);
+
+void write_dat_long(FILE *fd, unsigned long *buffer, unsigned size, int &dat_counter, int dat_increment);
+
+// call extract() on large buffer
+void extract_entropies(uint16_t *buffer, unsigned buffer_size, unsigned &output_size);
+
+// extract entropy function
 void extract(const unsigned N, uint64_t const *in, 
                     const unsigned L, uint64_t *out, 
                     uint64_t const *m);
+
+// build distribution diagram
+void update_histogram(uint16_t *buffer, unsigned size);
+
 
 enum options {
     OPT_NULL = 0,
@@ -127,7 +155,9 @@ struct option long_options[] = {
     { "in-bit-count",   required_argument,  0, OPT_INBITS },
     { "out-bit-count",  required_argument,  0, OPT_OUTBITS },
     { "seed-file",      required_argument,  0, OPT_SEEDFILE },
+
     { "histogram",      required_argument,  0, OPT_HISTOGRAM },
+    { "bin-bits",      required_argument,   0, OPT_BINBITS },
 
     { "pyxplot",        optional_argument,  0, OPT_PYXPLOT },
 
@@ -169,7 +199,7 @@ void help()  {
          << "\t--out-bit-count=<n>       number of output bits for --extract-entropy. Default: 1152" << endl
          << "\t--seed-file=<file>        random seed used for --extract-entropy" << endl
 
-         << "\t--histogram               output value distribution diagram instread of data" << endl
+         << "\t--histogram=<file>        output value distribution diagram instread of data" << endl
          << "\t--bin-bits                number of highest significant bits for --histogram. Default: 12" << endl
 
          << "\t--list-ranges             show supported input voltage ranges" << endl
@@ -258,22 +288,48 @@ void show_size(std::ostream &out, int sz) {
 }
 
 std::string size_str(unsigned long sz, int base=1024) {
-    if (sz<base || sz%base!=0) {
+    unsigned remainder;
+    if (sz<base) {
         return std::to_string(sz);
     } else {
+        remainder = (sz % base) * 10 / base;
         sz /= base;
-        if (sz<base  || sz%base!=0) {
-            return std::to_string(sz) + "k";
+        if (sz<base) {
+            return std::to_string(sz) + "." + std::to_string(remainder) + " k";
         } else {
+            remainder = (sz % base) * 10 / base;
             sz /= base;
-            if (sz<base  || sz%base!=0) {
-                return std::to_string(sz) + "M";
+            if (sz<base) {
+                return std::to_string(sz) + "." + std::to_string(remainder) + " M";
             } else {
+            remainder = (sz % base) * 10 / base;
                 sz /= base;
-                return std::to_string(sz) + "G";
+                return std::to_string(sz) + "." + std::to_string(remainder) + " G";
             }
         }
     }
+}
+
+std::string time_str(unsigned tm) {
+    std::string str;
+    if (tm == 0) 
+        str = str + "0 msec"; 
+    if (tm>1000) {
+        str = str + std::to_string(tm/1000) + " sec ";
+        tm = tm % 1000;
+    }
+    if (tm >= 0) {
+        str = str + std::to_string(tm) + " msec";
+    }
+    return str;
+}
+
+void check_read_access(const char *filename) {
+
+}
+
+void check_write_access(const char *filename) {
+
 }
 
 void process_option(int short_option, const char *optarg) {
@@ -311,10 +367,7 @@ void process_option(int short_option, const char *optarg) {
         case OPT_WRITE_CONFIG: {
             config_file = strdup(optarg);
 
-            int ret = access(config_file, R_OK);
-            if (ret) {
-                throw std::runtime_error("cannot create config file: "+std::string(strerror(errno)));
-            }
+            check_write_access(config_file);
             
             break;
         }
@@ -322,11 +375,8 @@ void process_option(int short_option, const char *optarg) {
         case 'i': 
         case OPT_INPUT: {
             infile = strdup(optarg);
-            if (strcmp(outfile, "-") != 0) {
-                int ret = access(extract_seedfile, R_OK);
-                if (ret) {
-                    throw std::runtime_error("cannot locate input file: "+std::string(strerror(errno)));
-                }
+            if (strcmp(infile, "-") != 0) {
+                check_read_access(config_file);
             }
             break;
         }
@@ -341,10 +391,7 @@ void process_option(int short_option, const char *optarg) {
         case OPT_OUTPUT: {
             outfile = strdup(optarg);
             if (strcmp(outfile, "-") != 0) {
-                int ret = access(extract_seedfile, R_OK);
-                if (ret) {
-                    throw std::runtime_error("cannot create output file: "+std::string(strerror(errno)));
-                }
+                check_write_access(outfile);
             }
             break;
         }
@@ -429,15 +476,28 @@ void process_option(int short_option, const char *optarg) {
 
         case OPT_SEEDFILE: {
             extract_seedfile = strdup(optarg);
-            int ret = access(extract_seedfile, R_OK);
-            if (ret) {
-                throw std::runtime_error("cannot locate seedfile: "+std::string(strerror(errno)));
-            }
+            check_read_access(extract_seedfile);
             break;
         }
 
         case OPT_HISTOGRAM: {
             write_histogram = true;
+            if (optarg && *optarg) {
+                histogram_file = strdup(optarg);
+            } else {
+                if (!outfile) {
+                    throw std::runtime_error("cannot derive pyxplot filename from output-file");
+                }
+                char *p = strrchr(outfile, '.');
+                if (!p) {
+                    throw std::runtime_error("cannot derive pyxplot filename from output-file");
+                }
+                int len = p - outfile;
+                histogram_file = (char *) malloc(len+14+1);
+                strncpy(histogram_file, outfile, len);
+                strcat(histogram_file, ".histogram.dat");
+            }
+            check_write_access(histogram_file);
             break;
         }
 
@@ -455,24 +515,19 @@ void process_option(int short_option, const char *optarg) {
                 pyxdatfile = strdup(optarg);
             } else {
                 if (!outfile) {
-                    cerr << "cannot derive pyxplot filename from output-file" << endl;
-                    exit(0);
+                    throw std::runtime_error("cannot derive pyxplot filename from output-file");
                 }
                 char *p = strrchr(outfile, '.');
                 if (!p) {
-                    cerr << "cannot derive pyxplot filename from output-file" << endl;
-                    exit(0);
+                    throw std::runtime_error("cannot derive pyxplot filename from output-file");
                 }
                 int len = p - outfile;
                 pyxdatfile = (char *) malloc(len+4+1);
                 strncpy(pyxdatfile, outfile, len);
-                strcat(pyxdatfile, ".dat");
+                strcpy(pyxdatfile+len, ".dat");
 
-                int ret = access(extract_seedfile, W_OK);
-                if (ret) {
-                    throw std::runtime_error("cannot create .dat-file: "+std::string(strerror(errno)));
-                }
             }
+            check_write_access(pyxdatfile);
             break;
         }
 
@@ -624,7 +679,7 @@ void write_config(const char *filename) {
     }
 
     if (write_histogram) {
-        out << "histogram" << endl;
+        out << "histogram " << histogram_file << endl;
     }
 
     if (pyxdatfile)
@@ -634,15 +689,27 @@ void write_config(const char *filename) {
 }
 
 
+void interrupt(int sig) {
+    if (interrupted) {
+        cerr << "\n** abort on user request **" <<endl;
+        abort();
+    } else {
+        cerr << "\n** stopped on user request **" <<endl;
+        interrupted = true;
+    }
+}
+
 int main(int argc, char * const argv[]) {
     int option_index;
 
+    // show usage on invocation without argument
     progname = argv[0];
     if (argc==1) {
         usage();
         exit(0);
     }
 
+    // parse commandline
     for (;; ){
         int opt = getopt_long(argc, argv, short_options, long_options, &option_index);
         if (opt==-1)
@@ -651,6 +718,9 @@ int main(int argc, char * const argv[]) {
             process_option(opt, optarg);
     }
 
+    /* 
+     *  check invocation arguments consistency
+     */
 
     if (outfile || pyxdatfile) {
         if (test_mode) {
@@ -686,6 +756,10 @@ int main(int argc, char * const argv[]) {
         }
     }
 
+    /*
+     *  show diagnostics
+     */
+
     if (verbose>1) {
         if (infile) {
             cerr << "Reading data from ";
@@ -698,7 +772,7 @@ int main(int argc, char * const argv[]) {
             static const char * const channel_names[] = {
                 "none", "A", "B", "A+B"
             };
-            cerr << "Capturing data form board [" << system_id << ',' << board_id << "]";
+            cerr << "Capturing data from board [" << system_id << ',' << board_id << "]";
             cerr << " channel "<< channel_names[channel] << "." << endl;
 
             if (eigth_bit) {
@@ -717,29 +791,50 @@ int main(int argc, char * const argv[]) {
         } else {
             cerr << ", streaming continously." << endl;
         }
+
         if (in_memory) {
             cerr << "Reading to preallocated Memory buffers." << endl;
         }
+
         if (test_mode) {
             cerr << "Running in test-mode." << endl;
         }
+
+        if (extract_entropy) {
+            cerr << "Extracting entropy with " 
+                 << extract_inbits << " in- to " << extract_outbits << "out-bits, using";
+            if (extract_seedfile)
+                cerr << " seed from file " << extract_seedfile << "." << endl;
+            else
+                cerr << " internal seed." << endl; 
+        }
+
+        if (write_histogram) {
+            cerr << "Writing histogram to " << histogram_file << "." << endl;
+        }
+
         if (outfile) {
             if (strcmp(outfile, "-")==0)
                 cerr << "streaming to stdout." << endl;
             else
                 cerr << "writing data to " << outfile << "." << endl;
         }
+
         if (pyxdatfile) {
             cerr << "Generating pyxplot data-file to " << pyxdatfile;
             cerr << "." << endl;
         }        
     }
 
+    // write config to file if requested
     if (config_file) {
         write_config(config_file);
     }
 
-    // allocate buffer
+    /*
+     *  allocate capture buffers
+     */
+
     uint8_t *memory_buffer;
     unsigned num_buffers = 8;
     size_t buffer_size = (eigth_bit ? 1:2) * record_size;
@@ -756,15 +851,25 @@ int main(int argc, char * const argv[]) {
 
     init_buffer_list(num_buffers);
 
-    // open disk files
+    /*
+     *  open disk files
+     */
+
     int in_fd = -1, out_fd = -1;
     FILE *dat_fd = NULL;
+    FILE *histogram_fd = NULL;
+    int dat_counter = 1;    // datapoint counter for pyxplot
+    int dat_increment = 1;
 
 
     if (infile) {       // open input file and allocate buffers
-        in_fd = open(infile, O_RDONLY);
-        if (!in_fd) {
-            throw std::runtime_error(std::string("cannot open ") + infile + " for reading: " + std::string(strerror(errno)));
+        if (strcmp(infile, "-")==0) {
+            in_fd = STDIN_FILENO;
+        } else {
+            in_fd = open(infile, O_RDONLY);
+            if (!in_fd) {
+                throw std::runtime_error(std::string("cannot open ") + infile + " for reading: " + std::string(strerror(errno)));
+            }
         }
 
         for (int n=0; n<num_buffers; ++n) {
@@ -779,6 +884,16 @@ int main(int argc, char * const argv[]) {
             board->abort_async_read();
             board->set_record_size(0, record_size);
             board->set_capture_clock(INTERNAL_CLOCK, ATS::to_samplerate_code(samplerate), CLOCK_EDGE_FALLING, 0);
+
+            if (eigth_bit) {
+                board->set_parameter(CHANNEL_A, DATA_WIDTH, 8);
+                board->set_parameter(CHANNEL_B, DATA_WIDTH, 8);
+                board->set_parameter(CHANNEL_A, PACK_MODE, PACK_8_BITS_PER_SAMPLE);
+                board->set_parameter(CHANNEL_B, PACK_MODE, PACK_8_BITS_PER_SAMPLE);    
+            } else if (pack_12_bit) {
+                board->set_parameter(CHANNEL_A, PACK_MODE, PACK_12_BITS_PER_SAMPLE);
+                board->set_parameter(CHANNEL_B, PACK_MODE, PACK_12_BITS_PER_SAMPLE);    
+            }
 
             board->input_control(CHANNEL_A, DC_COUPLING, ATS::to_inputrange_code(input_quadrant, input_range), IMPEDANCE_50_OHM);
             board->input_control(CHANNEL_B, DC_COUPLING, ATS::to_inputrange_code(input_quadrant, input_range), IMPEDANCE_50_OHM);
@@ -814,33 +929,83 @@ int main(int argc, char * const argv[]) {
     }
 
     if (outfile) {      // open output file
-        out_fd = open(outfile, O_WRONLY|O_CREAT|O_TRUNC, 0666);
-        if (out_fd<0) {
-            throw std::runtime_error("failed to create output file " + std::string(outfile) + ": " + std::string(strerror(errno)));
+        if (strcmp(infile, "-")==0) {
+            in_fd = STDOUT_FILENO;
+        } else {
+            out_fd = open(outfile, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+            if (out_fd<0) {
+                throw std::runtime_error("failed to create output file " + std::string(outfile) + ": " + std::string(strerror(errno)));
+            }
         }
     }
 
-    // capture data
-    int dat_counter = 1;    // datapoint counter for pyxplot
-    int dat_increment = 1;
+    if (pyxdatfile) {
+        dat_fd = fopen(pyxdatfile, "w");
+        if (!dat_fd) {
+            throw std::runtime_error("canot open pyxplot file " + std::string(pyxdatfile) + ": " + std::string(strerror(errno)));
+        }
+    }
 
-    unsigned *histogram;
-    unsigned histogram_shift = 0;
+    if (histogram_file) {
+        histogram_fd = fopen(histogram_file, "w");
+        if (!histogram_fd) {
+            throw std::runtime_error("canot open histogram file " + std::string(pyxdatfile) + ": " + std::string(strerror(errno)));
+        }
+    }
+
+    /*
+     *  initialize extract function
+     */
+
+    if (extract_entropy) {
+        unsigned seed_bits = extract_inbits * extract_outbits;
+        if (extract_seedfile) {
+            extract_seed = (uint64_t *) malloc(seed_bits / 8);
+            int fd = open(extract_seedfile, O_RDONLY);
+            if (fd<0) {
+                throw std::runtime_error("cannot open seedfile:" + std::string(strerror(errno)));
+
+            }
+            int bytes = read(fd, extract_seed, seed_bits/8);
+            if ( bytes != seed_bits/8) {
+                if (bytes>=0) {
+                    throw std::runtime_error("not enough entropy in seedfile.");
+                } else {
+                    throw std::runtime_error("cannot read from seedfile: " + std::string(strerror(errno)));
+                }
+            }
+            close(fd);
+        } else {
+            if (seed_bits > builtin_extract_seed_bits) {
+                cerr << seed_bits << " " << builtin_extract_seed_bits << endl;
+                throw std::runtime_error("extract entropy: extract window to big for builtin seed, please specify seedfile");
+            }
+            extract_seed = builtin_extract_seed;
+        }
+        extract_buffer = (uint64_t *)malloc(extract_outbits / 8);
+        if (!extract_buffer) {
+            throw std::runtime_error("out of memory allocating extract buffer");
+        }
+    }
+
+    /*
+     * initialize histogram
+     */
+
     if (write_histogram) {
         if (eigth_bit) {
-            unsigned histogram_size = 0x0100;
+            histogram_size = 0x0100;
             if (histogram_binbits<8) {
                 for (int n=8; n>histogram_binbits; --n) {
                     histogram_shift++;
                     dat_increment <<= 1;
                     histogram_size >>= 1;
                 }
-                histogram = (unsigned *) calloc(sizeof(unsigned), histogram_size);
             } 
-            histogram = (unsigned *) calloc(sizeof(unsigned), 0x0100);
+            histogram = (unsigned long *) calloc(sizeof(unsigned long), histogram_size);
             dat_counter = -0x0080;
         } else {
-            unsigned histogram_size = 0x1000;
+            histogram_size = 0x1000;
             if (histogram_binbits<12) {
                 for (int n=12; n>histogram_binbits; --n) {
                     histogram_shift++;
@@ -848,19 +1013,41 @@ int main(int argc, char * const argv[]) {
                     histogram_size >>= 1;
                 }
             }
-            histogram = (unsigned *) calloc(sizeof(unsigned), 0x1000);
+            histogram = (unsigned long*) calloc(sizeof(unsigned long), histogram_size);
             dat_counter = -0x0800;
         }
     }
 
+    /*
+     *  capture and process data
+     */
+
     uint16_t *buffer;
+    if (verbose>0) {
+        cerr << "Reading data, press ^C to stop reading" << endl;  
+    }
+    signal(SIGINT, interrupt);
+
+
+    struct timeval tm_start;
+    gettimeofday(&tm_start, NULL);
+
+    long in_bytes = 0, out_bytes = 0;
+    long dropped_frames = 0;
     for (int rec=0; record_count==0 || rec<record_count; ++rec) {
-        if (in_fd>=0) {
+
+        if (interrupted)
+            break;
+
+        if (verbose>2)
+            fprintf(stderr, "\rReading record #%d", rec); fflush(stderr);
+
+        if (in_fd>=0) { // read from infile
             buffer = pop_buffer();
             if(buffer_size!=read(in_fd, buffer, buffer_size)) {
                 throw std::runtime_error("error on read from input file: " + std::string(strerror(errno)));
             }
-        } else {
+        } else { // capture from adc
             RETURN_CODE ret; 
             do {
                 buffer = pop_buffer();
@@ -876,123 +1063,194 @@ int main(int argc, char * const argv[]) {
                 } else if (ret==ApiBufferOverflow) {
 
                     // TODO: add flag to ignore overflows
+                    dropped_frames++;
                     throw std::runtime_error("on-board memory overflow");
                 } 
             } while (ret!=ApiSuccess);
         }
 
-        int output_size = buffer_size;
+        unsigned output_size = buffer_size;
 
         if (in_memory) {
+            // post-pone processing...
             *in_memory_p++ = buffer;
+
+            in_bytes += buffer_size;
+
 
         } else {
             if (extract_entropy) {
-
+                extract_entropies(buffer, buffer_size, output_size);
             }
             
             if (write_histogram) {
-                if (eigth_bit) {
-                    int8_t * dat = (int8_t *) buffer;
-                    for (int i=0; i<output_size; i+=2) {
-                        int32_t v = *dat;
-                        v += 0x0800;
-                        v &= 0x0fff;
-                        v >>= histogram_shift;
-                        histogram[v] ++;
-                    }
-                } else if (pack_12_bit) {
-                    uint8_t * dat = (uint8_t *) buffer;
-                    for (int i=0; i<output_size; i+=3) {
-                        int32_t a = (*dat++) << 4;
-                        int32_t x = *dat++;
-                        int32_t b = *dat++;
-                        a |= (x>>4) & 0x000f;
-                        b |= (x<<8) & 0x0f00;
-                        a += 0x0800;
-                        a &= 0x0fff;
-                        a >>= histogram_shift;
-                        histogram[a] ++;
-                        b += 0x0800;
-                        b &= 0x0fff;
-                        b >>= histogram_shift;
-                        histogram[b] ++;
-                    }
-                } else {
-                    uint16_t * dat = (uint16_t *)buffer;
-                    for (int i=0; i<output_size; i+=2) {
-                        int v = *dat;
-                        v += 0x0800;
-                        v &= 0xfff;
-                        v >>= histogram_shift;
-                        histogram[v] ++;
-                    }
-                }
+                update_histogram(buffer, output_size);
             }
-        }
 
-        if (!test_mode && !write_histogram && !in_memory) {
             if (out_fd>=0) {
-                fprintf(stderr, "%d\r", rec); fflush(stderr);
                 if (write(out_fd, buffer, output_size) != output_size) {
                     throw std::runtime_error("error on write to outfile: " + std::string(strerror(errno)));
                 }
             }
             if (dat_fd) {
-                if (eigth_bit) {
-                    uint8_t * dat = (uint8_t *) buffer;
-                    for (int i=0; i<output_size; i+=2) {
-                        fprintf(dat_fd, "%d   %d\n", dat_counter, *dat++);
-                        dat_counter += dat_increment;
-                    }
-                } else if (pack_12_bit) {
-                    uint8_t * dat = (uint8_t *) buffer;
-                    for (int i=0; i<output_size; i+=3) {
-                        int32_t a = (*dat++) << 4;
-                        int32_t x = *dat++;
-                        int32_t b = *dat++;
-                        a |= (x>>4) & 0x000f;
-                        b |= (x<<8) & 0x0f00;
-                        fprintf(dat_fd, "%d   %d\n", dat_counter, a);
-                        dat_counter += dat_increment;
-                        fprintf(dat_fd, "%d   %d\n", dat_counter, b);
-                        dat_counter += dat_increment;
-                    }
-                } else {
-                    uint16_t * dat = (uint16_t *)buffer;
-                    for (int i=0; i<output_size; i+=2) {
-                        fprintf(dat_fd, "%d   %d\n", dat_counter, *dat++);
-                        dat_counter += dat_increment;
-                    }
-                }
+                write_dat(dat_fd, buffer, output_size, dat_counter);
             }
-        }
 
-        push_buffer(buffer);
-        if (in_fd<0) 
-            board->post_async_buffer(buffer, buffer_size);
+            in_bytes += buffer_size;
+            out_bytes += output_size;
+
+            push_buffer(buffer);
+            if (in_fd<0) 
+                board->post_async_buffer(buffer, buffer_size);
+        }
+    }
+    if (verbose>2)
+        fprintf(stderr, "\n");
+
+    struct timeval tm_stop;
+    gettimeofday(&tm_stop, NULL);
+
+    if (verbose>0) {
+        unsigned elapsed = (tm_stop.tv_sec - tm_start.tv_sec)*1000*1000 
+                         + (tm_stop.tv_usec - tm_start.tv_usec);
+        elapsed /= 1000;
+        unsigned secs = elapsed/1000 + 1;
+        cerr << "Captured " << size_str(in_bytes) 
+             << "Bytes (" << size_str(8*in_bytes/secs) << "Bits/sec), "
+             << "wrote " << size_str(out_bytes) 
+             << "Bytes (" << size_str(8*out_bytes/secs) << "Bits/sec) in " 
+             << time_str(elapsed) << ", "
+             << dropped_frames << " frames dropped." 
+             << endl;        
     }
 
     if (in_memory) {
         // write collected data frames
-        //TODO: implement
+        for (uint16_t **buffer_p = in_memory_buffers; buffer_p<in_memory_p; buffer_p++) {
+            uint16_t *buffer = *buffer_p;
+            unsigned output_size = buffer_size;
+            if (extract_entropy) {
+                extract_entropies(buffer, buffer_size, output_size);
+            }
+            if (write_histogram) {
+                update_histogram(buffer, output_size);
+            }
+            if (out_fd>=0) {
+                if (write(out_fd, buffer, output_size) != output_size) {
+                    throw std::runtime_error("error on write to outfile: " + std::string(strerror(errno)));
+                }
+            }
+            if (dat_fd) {
+                write_dat(dat_fd, buffer, output_size, dat_counter);
+            }
+        }
+        if (write_histogram) {
+            write_dat_long(histogram_fd, histogram, histogram_size, dat_counter, dat_increment);            
+        }
+    } else if (write_histogram) {
+        write_dat_long(histogram_fd, histogram, histogram_size, dat_counter, dat_increment);            
     }
 
     if (!infile)
         board->abort_async_read();
 
-
-    if (in_fd>=0) close(in_fd);
-    if (out_fd>=0) close(out_fd);
+    if (in_fd>STDERR_FILENO) close(in_fd);
+    if (out_fd>STDOUT_FILENO) close(out_fd);
     if (dat_fd) fclose(dat_fd);
+    if (histogram_fd) fclose(histogram_fd);
 
 }
 
-void write_buffer(uint8_t *data, unsigned size) {
-
+void write_dat(FILE *dat_fd, uint16_t *buffer, unsigned output_size, int &dat_counter) {
+    if (eigth_bit) {
+        uint8_t * dat = (uint8_t *) buffer;
+        for (int i=0; i<output_size; i+=2) {
+            fprintf(dat_fd, "%d   %d\n", dat_counter, *dat++);
+            dat_counter += 1;
+        }
+    } else if (pack_12_bit) {
+        uint8_t * dat = (uint8_t *) buffer;
+        for (int i=0; i<output_size; i+=3) {
+            int32_t a = (*dat++) << 4;
+            int32_t x = *dat++;
+            int32_t b = *dat++;
+            a |= (x>>4) & 0x000f;
+            b |= (x<<8) & 0x0f00;
+            fprintf(dat_fd, "%d   %d\n", dat_counter, a);
+            dat_counter += 1;
+            fprintf(dat_fd, "%d   %d\n", dat_counter, b);
+            dat_counter += 1;
+        }
+    } else {
+        uint16_t * dat = (uint16_t *)buffer;
+        for (int i=0; i<output_size; i+=2) {
+            fprintf(dat_fd, "%d   %d\n", dat_counter, *dat++);
+            dat_counter += 1;
+        }
+    }
 }
 
+void write_dat_long(FILE *fd, unsigned long *buffer, unsigned size, int &dat_counter, int dat_increment) {
+    unsigned long *p = buffer;
+    for (int n=0; n<size; ++n) {
+        fprintf(fd, "%9d   %lu\n", dat_counter, *p++);
+        dat_counter += dat_increment;
+    }    
+}
 
+void update_histogram(uint16_t *buffer, unsigned size) {
+    if (eigth_bit) {
+        int8_t * dat = (int8_t *) buffer;
+        for (int i=0; i<size; i+=2) {
+            int32_t v = *dat;
+            v += 0x0800;
+            v &= 0x0fff;
+            v >>= histogram_shift;
+            histogram[v] ++;
+        }
+    } else if (pack_12_bit) {
+        uint8_t * dat = (uint8_t *) buffer;
+        for (int i=0; i<size; i+=3) {
+            int32_t a = (*dat++) << 4;
+            int32_t x = *dat++;
+            int32_t b = *dat++;
+            a |= (x>>4) & 0x000f;
+            b |= (x<<8) & 0x0f00;
+            a += 0x0800;
+            a &= 0x0fff;
+            a >>= histogram_shift;
+            histogram[a] ++;
+            b += 0x0800;
+            b &= 0x0fff;
+            b >>= histogram_shift;
+            histogram[b] ++;
+        }
+    } else {
+        uint16_t * dat = (uint16_t *)buffer;
+        for (int i=0; i<size; i+=2) {
+            int v = *dat;
+            v += 0x0800;
+            v &= 0xfff;
+            v >>= histogram_shift;
+            histogram[v] ++;
+        }
+    }
+}
+
+void extract_entropies(uint16_t *buffer, unsigned buffer_size, unsigned &output_size) {
+    output_size = 0;
+    uint64_t *in = (uint64_t *) buffer;
+    uint64_t *out = (uint64_t *) buffer;
+    for (int n=0; n<buffer_size; n+=extract_inbits/8) {
+        extract(extract_inbits, (uint64_t *) buffer,
+                extract_outbits, extract_buffer,
+                extract_seed);
+        memcpy(out, extract_buffer, extract_outbits/8);
+        in += extract_inbits/8;
+        out += extract_outbits/8;
+        output_size += extract_outbits/8;
+    }    
+}
 
 void extract(const unsigned N, uint64_t const *in, 
                     const unsigned L, uint64_t *out, 

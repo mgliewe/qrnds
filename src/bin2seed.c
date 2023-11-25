@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
 	fprintf(out,
 		"\n};\n"
 		"\n"
-		"unsigned builtin_extract_seed_bits = %ld;\n", (size-1) * sizeof(uint64_t)
+		"unsigned builtin_extract_seed_bits = %ld;\n", 8 * size * sizeof(uint64_t)
 	);
 }
 
