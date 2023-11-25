@@ -929,7 +929,7 @@ int main(int argc, char * const argv[]) {
     }
 
     if (outfile) {      // open output file
-        if (strcmp(infile, "-")==0) {
+        if (strcmp(outfile, "-")==0) {
             in_fd = STDOUT_FILENO;
         } else {
             out_fd = open(outfile, O_WRONLY|O_CREAT|O_TRUNC, 0666);
@@ -1287,12 +1287,14 @@ void extract(const unsigned N, uint64_t const *in,
 }
 
 uint16_t **buffer_list;
-int buffer_list_index;
+int buffer_list_head;
+int buffer_list_tail;
 int buffer_list_count;
 int buffer_list_capacity;
 
 void init_buffer_list(int count) {
     buffer_list = (uint16_t **) calloc(sizeof(uint8_t *), count);
+    buffer_list_head = buffer_list_tail = buffer_list_count = 0;
     buffer_list_capacity = count;
 }
 
@@ -1300,22 +1302,26 @@ void push_buffer(uint16_t *buffer) {
     if (buffer_list_count==buffer_list_capacity) {
         throw std::runtime_error("bufferlist overflow");
     }
-    int n = buffer_list_index + 1;
-    if (n>buffer_list_capacity) n = 0;
+    int n = buffer_list_tail + 1;
+    if (n>=buffer_list_capacity) 
+        n = 0;
     buffer_list[n] = buffer;
+    buffer_list_tail = n;
     buffer_list_count++;
 }
 
 uint16_t *pop_buffer() {
+    uint16_t *buffer;
     if (buffer_list_count==0) {
         throw std::runtime_error("bufferlist underflow");
     }
     buffer_list_count--;
 
-    buffer_list_index++;
-    if (buffer_list_index>buffer_list_capacity) 
-        buffer_list_index = 0;
-    return buffer_list[buffer_list_index];
+    buffer = buffer_list[buffer_list_head++];
+
+    if (buffer_list_head>=buffer_list_capacity) 
+        buffer_list_head = 0;
+    return buffer;
 }
 
 
