@@ -1,7 +1,7 @@
 
 
 
-
+#include "von_neumann.h"
 
 
 void VonNeumannDebias::run() {
@@ -16,7 +16,7 @@ void VonNeumannDebias::run() {
         if (is_paused()) {
             wait_for_resume();
         }
-        if (is_stopped())
+        if (is_stopped() && empty_input())
             break;
 
         Frame *in_buffer = receive();

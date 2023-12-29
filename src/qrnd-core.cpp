@@ -7,11 +7,13 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <iostream>
 
+namespace QRND {
 
 Lockable::Lockable() {
 	int status = pthread_mutex_init(&mutex, NULL);
-	assert (0 != status );
+	assert (0 == status );
 }
 
 Lockable::~Lockable() {
@@ -27,12 +29,9 @@ void Lockable::unlock() {
 }
 
 
-
-
-
 Semaphore::Semaphore() {
     int status = sem_init(&sem, 0, 0);
-	assert ( 0 != status );
+	assert ( 0 == status );
 }
 
 Semaphore::~Semaphore() {
@@ -56,8 +55,6 @@ void Semaphore::wait(long timeout) {
 void Semaphore::post() {
     sem_post(&sem);
 }
-
-
 
 
 
@@ -185,8 +182,12 @@ void Frame::give_back() {
 
 
 FrameStream::FrameStream() 
-    : _first(0), _last(0)
+    : Lockable(), Semaphore(), _first(0), _last(0)
 {
+}
+
+FrameStream::~FrameStream() {
+
 }
 
 void FrameStream::enqueue(Frame *frame) {
@@ -196,6 +197,8 @@ void FrameStream::enqueue(Frame *frame) {
         _last->link = frame;
     }
     _last = frame;
+    if (!_first)    
+        _first = frame;
     Semaphore::post();
     unlock();
 }
@@ -238,27 +241,31 @@ Frame *Consumer::receive() {
     return b;
 }
 
+Frame *Consumer::receive_when_available() {
+    Frame *b=input.dequeue(1); 
+    return b;
+}
 
 
-static std::map<std::string, Node *> *_nodes;
+static std::map<std::string, Node *> _nodes;
 
 /* static */ void Node::init() {
-    _nodes = new std::map<std::string, Node *>;
+    //_nodes = new std::map<std::string, Node *>;
 }
 
 /* static */ void Node::add_node(Node *node) {
-    if (_nodes->find(node->name) != _nodes->end())
-        throw ("on create node: a Consumer/Producer of this name already exists");
-    (*_nodes)[node->name] = node;
+    // if (_nodes.find(node->name) != _nodes.end())
+    //    throw ("on create node: a Consumer/Producer of this name already exists");
+    _nodes[node->name] = node;
 }
 
 /* static */  void Node::remove_node(Node *node) {
-    _nodes->erase(node->name);
+    _nodes.erase(node->name);
 }
 
 /* static */ int Node::for_each( iterator_func, void *ctx) {
     int n = 0;
-    for (std::map<std::string, Node *>::iterator it = _nodes->begin(); it!=_nodes->end(); ++it) {
+    for (std::map<std::string, Node *>::iterator it = _nodes.begin(); it!=_nodes.end(); ++it) {
         (iterator_func) (it->second, ctx);
         ++n;
     }
@@ -266,12 +273,20 @@ static std::map<std::string, Node *> *_nodes;
 }
 
 /* static */ void Node::tick() {
-    for (std::map<std::string, Node *>::iterator it = _nodes->begin(); it!=_nodes->end(); ++it) {
-        (it->second)->stats.tick();
+    for (std::map<std::string, Node *>::iterator it = _nodes.begin(); it!=_nodes.end(); ++it) {
         (it->second)->on_tick();
     }   
 }
 
+void abort(std::string &msg) {
+    std::cerr << msg << std::endl;
+    ::abort();
+}
+
+void abort(const char *msg) {
+    std::string str = msg;
+    abort(str);
+}
 
 Producer::Producer(const char *name, int num_outputs) 
     : Node(name),
@@ -299,7 +314,14 @@ Frame *Producer::get_frame() {
     return b;
 }
 
+Frame *Producer::get_frame_if_available() {
+    Frame *b = free_buffers.dequeue(1);
+    return b;
+}
+
 void Producer::send(int channel, Frame *frame) {
+
+    // std::cerr << "C:" << channel << " N:" << num_outputs << std::endl;
     assert( channel>=0 );
     assert( channel<num_outputs );
 
@@ -323,99 +345,25 @@ void Producer::allocate_buffers(int size, int count) {
     }
 }
 
+void Producer::release_buffers() {
+    // TODO:
+}
 
+void Producer::connect_output(int slot, Consumer &c) {
+    assert( slot>=0 );
+    assert( slot<num_outputs );
 
-NullReader::NullReader(const char *name, int buffersize, int num_buffer) 
-  : Producer(name, 1)
+    output_slots[slot] = &c;
+}
+
+Filter::Filter(const char *name, int num_outputs)
+    : Consumer(name), Producer(name, num_outputs)
 {
-    allocate_buffers(buffersize, num_buffer);
-}
-
-void NullReader::run() {
-    for (;;) {
-        if (is_paused()) {
-            wait_for_resume();
-        }
-        if (is_stopped())
-            break;
-        Frame *b = get_frame();
-        send(0, b);
-    }
-}
-
-
-RandReader::RandReader(const char *name, int buffersize, int num_buffer) 
-  : Producer(name, 1)
-{
-    allocate_buffers(buffersize, num_buffer);
-    seed = time(NULL);
-}
-
-void RandReader::run() {
-    for (;;) {
-        if (is_paused()) {
-            wait_for_resume();
-        }
-        if (is_stopped())
-            break;
-        Frame *b = get_frame();
-        for (int n=0; n<b->capacity; ++n) {
-            b->data[n] = rand_r(&seed);
-        }
-        b->count = b->capacity;
-        send(0, b);
-    }
 
 }
 
-
-
-
-StreamMangler::StreamMangler(const char *name, int num_outputs)
-    : Consumer(name), Producer(name, num_outputs), next_output(0) 
-{ 
+Filter::~Filter() {
 
 }
 
-void StreamMangler::run() {
-    for (;;) {
-        if (is_paused()) {
-            wait_for_resume();
-        }
-        if (is_stopped())
-            break;
-
-        Frame *frame = receive();
-        
-        // find next output and emit 
-        int n = next_output;
-        do {
-            // if slot is connected, emit
-            if (output_slots[n]) {
-                send(n, frame);
-                break;
-            } 
-            // advance to next slot
-            n++; 
-            if (n>num_outputs) {
-                n = 0;
-            }
-            // if we reached next_output, there are no connections; just dissmiss frame
-            if (n==next_output) {
-                frame->give_back();
-            }
-        } while (n!=next_output);
-
-        // advance to next slot for next iteration
-        n = n + 1;
-        if (n>num_outputs) {
-            n = 0;
-        }
-        next_output = n;
-    }
-
-}
-
-int main() {
-
-}
+} // end namespace

@@ -7,7 +7,7 @@
 #include "qrnd-core.h"
 #include "qrnd-disk.h"
 
-
+namespace QRND {
 
 DiskReader::DiskReader(const char *name, const char *filename, int buffersize, int num_buffer) 
     : Producer(name, 1)
@@ -16,8 +16,11 @@ DiskReader::DiskReader(const char *name, const char *filename, int buffersize, i
 
     fd = open(filename, O_RDONLY);
     if (fd<0) {
-        throw "canoonot open input file for reading";
+        throw "cannot open input file for reading";
     }
+}
+
+DiskReader::~DiskReader() {
 }
 
 void DiskReader::run() {
@@ -50,13 +53,17 @@ void DiskReader::run() {
 ZeroReader::ZeroReader(const char *name, int buffersize, int num_buffer) 
     : DiskReader(name, "/dev/zero", buffersize, num_buffer)
 {
-
 }
 
+ZeroReader::~ZeroReader() {
+}
 
 RandomReader::RandomReader(const char *name, int buffersize, int num_buffer) 
     : DiskReader(name, "/dev/random", buffersize, num_buffer)
 {
 
 }
+RandomReader::~RandomReader() {
+}
 
+} // end namespace

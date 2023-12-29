@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<!-- vim: set ts=4: -->
+<html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!--
+  Modified from original Node-Red source, for audio system visualization
+
+  Copyright 2013 IBM Corp.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<head>
+<title>Audio System Design Tool for Teensy Audio Library</title>
+<link href="bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
+<link href="jquery/css/smoothness/jquery-ui-1.10.3.custom.min.css" rel="stylesheet" media="screen">
+<link href="jquery/css/jquery.simplefilebrowser.css" rel="stylesheet" media="screen">
+<link rel="stylesheet" type="text/css" href="orion/built-editor.css"/>
+
+<!-- link rel="stylesheet" type="text/css" href="font-awesome/css/font-awesome.min.css"/ -->
+<link rel="stylesheet" type="text/css" href="font-awesome/css/all.css"/>
+
+<link rel="stylesheet" type="text/css" href="xterm.js/xterm.css">
+<link rel="stylesheet" href="style.css">
+<style>
+table.doc {border-spacing:3px; border-collapse:separate; font-size: 80%}
+tr.top {background-color:#C0C0C0}
+tr.odd {background-color:#F0F0F0}
+tr.even {background-color:#E0E0E0}
+p.func {padding-bottom:0; margin:0px}
+p.desc {padding-left:2em; margin:0px; padding-top:0.2em; padding-bottom:0.8em; font-size:0.75em}
+p.exam {padding-left:2em; text-indent:-1.2em; margin:0px; padding-top:0; padding-bottom:0.5em; font-size:0.75em; font-weight:bold}
+pre.desc {padding-left:3em; margin:0px; padding-top:0em; padding-bottom:0.8em; font-size:0.75em;
+	background-color:#FFFFFF; border:0px; line-height:100%;
+}
+span.indent {padding-left:2em}
+span.literal { color: #006699}
+span.comment {color: #777755}
+span.keyword {color: #cc6600}
+span.function {color: #996600}
+span.mainfunction {color: #993300; font-weight: bolder}
+</style>
+</head>
+<body spellcheck="false">
+<div class="navbar navbar-inverse navbar-fixed-top">
+
+	<ul id="menubar" class="menubar">
+		<li><a href="#">Project</a>
+			<ul class="sub-menu">
+				<li data-menu="file-new"><a href="#">New Project</a></li>
+				<li>-</li>
+				<li data-menu="file-load"><a href="#">Load..</a></li>
+				<li data-menu="file-save"><a href="#">Save</a></li>
+				<li data-menu="file-save-as"><a href="#">Save as..</a></li>
+			</ul>
+		</li>
+		<li><a href="#">Edit</a>
+			<ul class="sub-menu">
+				<li data-menu="edit-cut"><a href="#">Cut</a></li>
+				<li data-menu="edit-copy"><a href="#">Copy</a></li>
+				<li data-menu="edit-paste"><a href="#">Paste</a></li>
+				<li data-menu="edit-delete"><a href="#">Delete</a></li>
+				<li>-</li>
+				<li data-menu="edit-select-all"><a href="#">Select all</a></li>
+			</ul>
+		</li>
+		<li><a href="#">View</a>
+			<ul class="sub-menu">
+				<li data-menu="zoom-in"><a href="#">Zoom In</a></li>
+				<li data-menu="zoom-out"><a href="#">Zoom Out</a></li>
+				<li data-menu="zoom-zero"><a href="#">Zoom to 100%</a></li>
+				<li>-</li>
+				<li data-menu="worksheet-new"><a href="#">New Worksheet</a></li>
+				<li data-menu="worksheet-delete"><a href="#">Delete Worksheet</a></li>
+				<li data-menu="worksheet-rename"><a href="#">Rename Worksheet</a></li>
+				<li>-</li>
+				<li data-menu="view-close-windows"><a href="#">Close all Windows</a></li>
+			</ul>
+		</li>
+		<li><a href="#">Run</a>
+			<ul class="sub-menu">
+				<li data-menu="run-deploy"><a href="#">Run</a></li>
+				<li data-menu="run-stop"><a href="#">Stop</a></li>
+				<li>-</li>
+				<li data-menu="run-show-log"><a href="#">Show Log</a></li>
+				<li>-</li>
+				<li data-menu="run-show-code"><a href="#">Show Sourcecode</a></li>
+			</ul>
+		</li>
+		<li><a href="#">Help</a>
+			<ul class="sub-menu">
+				<li data-menu="help-about"><a href="#">About</a></li>
+			</ul>
+		</li>
+	</ul>
+
+	<style>
+
+		.ui-menu {
+			width: auto;
+		}
+		
+		.ui-menu:after {
+			content: ".";
+			display: block;
+			clear: both;
+			visibility: hidden;
+			line-height: 0;
+			height: 0;
+		}
+		.ui-menu .ui-menu-item {
+			display: inline-block;
+			margin: 0;
+			padding: 0;
+			width: auto;
+		}
+		
+		
+		.menubar li {
+			display: inline-block;
+		}
+		
+		#menubar li a span.ui-icon-carat-1-e {
+			display:none;
+			float:right;
+			position:static;
+			margin-top:2px;
+			width:16px;
+			height:16px;  
+			background:url(https://www.drupal.org/files/issues/ui-icons-222222-256x240.png) no-repeat -64px -16px;
+		}
+		
+		#menubar li ul li {
+			width: 150px;
+		}
+		
+		#menubar li ul {
+			width: 150px; 
+		}
+		
+		.ui-menu .ui-menu-item li a span.ui-icon-carat-1-e {
+			background:url(https://www.drupal.org/files/issues/ui-icons-222222-256x240.png) no-repeat -32px -16px !important;
+		}
+	</style>
+
+</div>
+
+<div id="main-container" class="sidebar-closed">
+	<div id="palette">
+		<img src="img/spin.svg" class="palette-spinner"/>
+		<div id="palette-container" class="palette-scroll">
+		</div>
+		<div id="palette-search">
+			<i class="icon-search"></i><input id="palette-search-input" type="text" placeholder="filter"><a href="#" id="palette-search-clear"><i class="icon-remove"></i></a></input>
+		</div>
+	</div><!-- /palette -->
+
+	<div id="workspace">
+		<ul id="workspace-tabs"></ul>
+		<!--<div id="workspace-add-tab"><a id="btn-workspace-add-tab" href="#"><i class="icon-plus"></i></a></div>-->
+		<div id="chart"></div>
+		<div id="workspace-toolbar">
+			<div class="btn-group">
+				<a class="btn btn-small" href="#"><i class="icon-zoom-out"></i></a>
+				<a class="btn btn-small" href="#"><i class="icon-th"></i></a>
+				<a class="btn btn-small" href="#"><i class="icon-zoom-in"></i></a>
+			</div>
+		</div>
+		<div class="xterm" id="node-dialog-console-terminal">
+		</div>
+		</div>
+
+	<div id="chart-zoom-controls">
+		<div class="btn-group">
+			<a class="btn btn-mini" id="btn-zoom-out" href="#"><i class="icon-zoom-out"></i></a>
+			<a class="btn btn-mini" id="btn-zoom-zero" href="#"><i class="icon-th"></i></a>
+			<a class="btn btn-mini" id="btn-zoom-in" href="#"><i class="icon-zoom-in"></i></a>
+		</div>
+	</div>
+
+	<div id="sidebar">
+		<ul id="sidebar-tabs"></ul>
+		<div id="sidebar-content"></div>
+	</div>
+
+	<div id="sidebar-separator"></div>
+</div>
+
+<style>
+	#node-dialog-console-terminal {
+		position: absolute;
+		right: 0;
+		left: 0;
+		top: 30px;
+		bottom: 0;
+		display: none;
+	}
+</style>
+
+<div id="notifications"></div>
+
+<div id="dropTarget"><div>Drop the flow here</div></div>
+
+<div id="dialog" class="hide"><form id="dialog-form" class="form-horizontal"></form></div>
+
+<div id="node-config-dialog" class="hide">
+	<form id="dialog-config-form" class="form-horizontal"></form>
+	<div class="form-tips" id="node-config-dialog-user-count"></div>
+</div>
+
+<div id="node-dialog-load" class="hide">
+	<div class="save-dialog">
+		<div id="node-dialog-load-browser" class="load-dialog-lower"></div>
+	</div>
+</div>
+
+<div id="node-dialog-save" class="hide">
+	<div class="save-dialog">
+		<div class="form-row save-dialog-upper">
+			<label class="col">Filename: </label>
+			<input id="node-dialog-save-filename">
+		</div>
+		<div id="node-dialog-save-newfolder" title="create a folder">
+			<i class="fa-regular fa-folder-plus"></i>
+		</div>
+		<div id="node-dialog-save-delete" title="delete selected">
+			<i class="fa-regular fa-file-circle-xmark"></i>
+		</div>
+		<div id="node-dialog-save-browser" class="save-dialog-lower"></div>
+	</div>
+</div>
+
+<style>
+	.load-dialog, .save-dialog {
+		height: 100%;
+		display:flex;
+		flex-direction: column;
+	}
+	.load-dialog-upper, .save-dialog-upper {
+		flex:0;
+		width: 100%;
+	}
+	.load-dialog-lower, .save-dialog-lower {
+		flex:1;
+		border: 1px solid #ccc;
+		border-radius: 5px;
+	}
+	#node-dialog-save-newfolder {
+		position: absolute;
+		right: 12px;
+		top: 41px;
+	}
+	#node-dialog-save-delete {
+		position: absolute;
+		right: 64px;
+		top: 41px;
+	}
+</style>
+
+
+<div id="node-dialog-load-error" class="hide">
+	<form class="form-horizontal">
+		<div style="text-align: center; padding-top: 30px;">
+			Cannot load This file.
+		</div>
+		<div id="node-dialog-load-error-message" style="text-align: center; padding-top: 10px;">
+			Unknown error.
+		</div>
+	</form>
+</div>
+
+
+<div id="node-dialog-console" class="hide">
+	<div class="console-dialog">
+		<div class="xterm" id="x-node-dialog-console-terminal">
+		</div>
+	</div>
+</div>
+
+<style>
+	.console-dialog {
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+	}
+	.console-dialog .terminal {
+		flex: 1;
+	}
+	.console-dialog .xterm {
+		width: 100%;
+		height: 100%;
+	}
+</style>
+
+
+<div id="node-dialog-confirm-deploy" class="hide">
+	<form class="form-horizontal">
+		<div id="node-dialog-confirm-deploy-config" style="text-align: center; padding-top: 30px;">
+			Some of the nodes are not properly configured. Are you sure you want to deploy?
+		</div>
+		<div id="node-dialog-confirm-deploy-unknown" style="text-align: center; padding-top: 10px;">
+			The workspace contains some unknown node types:
+			<ul style="width: 300px; margin: auto; text-align: left;" id="node-dialog-confirm-deploy-unknown-list"></ul>
+			Are you sure you want to deploy?
+		</div>
+	</form>
+</div>
+
+<div id="node-dialog-error-deploy" class="hide">
+	<form class="form-horizontal">
+		<div id="node-dialog-error-deploy-noio" style="text-align: center; padding-top: 10px;">
+			<p>The workspace contains no input/output nodes!</p>
+			<p>You need an input or an output to export the data!</p>
+			<p>Without such a input/output function the exported
+			code will not run properly!</p>
+		</div>
+	</form>
+</div>
+
+<div id="node-help" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="node-help-label" aria-hidden="true">
+  <div class="modal-header">
+	<h5 id="node-help-label">Keyboard Shortcuts <span style="float: right;"><a href="http://node-red.github.io/docs" target="_blank">Open help in new window &raquo;</a></span></h5>
+  </div>
+  <div class="modal-body">
+	<table>
+		<tr>
+		  <td><span class="help-key">?</span></td><td>Help</td>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">a</span></td><td>Select all nodes</td>
+		</tr>
+		<tr>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">Space</span></td><td>Toggle sidebar</td>
+		  <td><span class="help-key">Shift</span> <span class="help-key">Click</span></td><td>Select all connected nodes</td>
+		</tr>
+		<tr>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">z</span></td><td>Undo</td>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">Click</span></td><td>Add/remove node from selection</td>
+		</tr>
+		<tr>
+		  <td></td><td></td>
+		  <td><span class="help-key">Delete</span></td><td>Delete selected nodes or link</td>
+		</tr>
+		<tr>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">x</span></td><td>Cut selected nodes</td>
+		  <td></td><td></td>
+		</tr>
+		<tr>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">c</span></td><td>Copy selected nodes</td>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">v</span></td><td>Paste nodes</td>
+		</tr>
+		<tr>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">i</span></td><td>Import nodes</td>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">e</span></td><td>Export selected nodes</td>
+		</tr>
+		<tr>
+		  <td colspan="2"></td>
+		</tr>
+		<tr>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">+</span></td><td>Zoom in</td>
+		  <td><span class="help-key">Ctrl</span> <span class="help-key">-</span></td><td>Zoom out</td>
+		</tr>
+	</table>
+  </div>
+  <div class="modal-footer">
+	<button class="btn" data-dismiss="modal" aria-hidden="true">Close</button>
+  </div>
+</div>
+
+<div id="node-dialog-library-save-confirm" class="hide">
+	<form class="form-horizontal">
+		<div style="text-align: center; padding-top: 30px;">
+		 A <span id="node-dialog-library-save-type"></span> called <span id="node-dialog-library-save-name"></span> already exists. Overwrite?
+		</div>
+	</form>
+</div>
+
+<div id="node-dialog-library-save" class="hide">
+	<form class="form-horizontal">
+		<div class="form-row">
+			<label for="node-dialog-library-save-folder"><i class="icon-folder-open"></i> Folder</label>
+			<input type="text" id="node-dialog-library-save-folder" placeholder="Folder">
+		</div>
+		<div class="form-row">
+			<label for="node-dialog-library-save-filename"><i class="icon-file"></i> Filename</label>
+			<input type="text" id="node-dialog-library-save-filename" placeholder="Filename">
+		</div>
+	</form>
+</div>
+
+<div id="node-dialog-library-lookup" class="hide">
+	<form class="form-horizontal">
+		<div class="form-row">
+			<ul id="node-dialog-library-breadcrumbs" class="breadcrumb">
+				<li class="active"><a href="#">Library</a></li>
+			</ul>
+		</div>
+		<div class="form-row">
+			<div style="vertical-align: top; display: inline-block; height: 100%; width: 30%; padding-right: 20px;">
+				<div id="node-select-library" style="border: 1px solid #999; width: 100%; height: 100%; overflow:scroll;"><ul></ul></div>
+			</div>
+			<div style="vertical-align: top; display: inline-block;width: 65%; height: 100%;">
+				<div style="height: 100%; width: 95%;" class="node-text-editor" id="node-select-library-text" ></div>
+			</div>
+		</div>
+	</form>
+</div>
+
+<div id="node-dialog-rename-workspace" class="hide">
+	<form class="form-horizontal">
+		<div class="form-row">
+			<label for="node-input-workspace-name" ><i class="icon-tag"></i> Name:</label>
+			<input type="text" id="node-input-workspace-name">
+		</div>
+	</form>
+</div>
+
+<div id="node-dialog-delete-workspace" class="hide">
+	<form class="form-horizontal">
+		<div style="text-align: center; padding-top: 30px;">
+		 Are you sure you want to delete '<span id="node-dialog-delete-workspace-name"></span>'?
+		</div>
+	</form>
+</div>
+
+<script type="text/x-red" data-template-name="export-clipboard-dialog">
+	<div class="form-row">
+		<label for="node-input-export" style="display: block; width:100%;"><i class="icon-share"></i> Source Code:</label>
+		<textarea readonly style="font-family: monospace; font-size: 12px; background:rgb(226, 229, 255); padding-left: 0.5em;" class="input-block-level" id="node-input-export" rows="12"></textarea>
+	</div>
+	<div class="form-tips">
+		Select the text above and copy to the clipboard with Ctrl-A Ctrl-C.
+	</div>
+</script>
+
+<script type="text/x-red" data-template-name="export-library-dialog">
+	<div class="form-row">
+		<label for="node-input-filename" ><i class="icon-tag"></i> Filename:</label>
+		<input type="text" id="node-input-filename" placeholder="Filename">
+	</div>
+</script>
+
+<script type="text/x-red" data-template-name="import-dialog">
+	<div class="form-row">
+		<label for="node-input-import"><i class="icon-share"></i>Nodes:</label>
+		<textarea style="font-family: monospace; font-size: 12px; background:rgb(226, 229, 255); padding-left: 0.5em;" class="input-block-level" id="node-input-import" rows="5" placeholder="Paste nodes here, or lookup in the library. When importing Arduino code, the whole flow will be replaced."></textarea>
+	</div>
+	<div class="form-tips">
+		<label for="node-input-arduino" style="font-size: 13px; padding: 2px 0px 0px 4px;">
+			<input style="margin-bottom: 4px; margin-right: 4px;" type="checkbox" id="node-input-arduino" checked="checked" class="input-block-level" />
+				&nbsp;Import copied code from the Arduino IDE
+		</label>
+	</div>
+</script>
+
+<script src="jquery/js/jquery-1.9.1.js"></script>
+<script src="bootstrap/js/bootstrap.min.js"></script>
+<script src="jquery/js/jquery-ui-1.10.3.custom.min.js"></script>
+<script src="jquery/js/jquery.ui.touch-punch.min.js"></script>
+<script src="jquery/js/jquery.simplefilebrowser.js"></script>
+
+<script src="d3/d3.v3.min.js"></script>
+
+<script src="xterm.js/xterm.js"></script>
+<script src="xterm.js/addon-fit.js"></script>
+
+<script src="lib/path.js"></script>
+<script src="lib/vfs.js"></script>
+
+<!--script src="orion/built-editor.min.js"></script -->
+
+
+<script src="red/main.js"></script>
+<script src="red/ui/state.js"></script>
+<script src="red/nodes.js"></script>
+<script src="red/storage.js"></script>
+<script src="red/history.js"></script>
+<script src="red/runtime.js"></script>
+<script src="red/ui/keyboard.js"></script>
+<script src="red/ui/tabs.js"></script>
+<script src="red/ui/view.js"></script>
+<script src="red/ui/sidebar.js"></script>
+<script src="red/ui/palette.js"></script>
+<script src="red/ui/tab-info.js"></script>
+<script src="red/ui/tab-config.js"></script>
+<script src="red/ui/filebrowser.js"></script>
+<script src="red/ui/editor.js"></script>
+<script src="red/ui/library.js"></script>
+<script src="red/ui/notifications.js"></script>
+<script src="red/ui/touch/radialMenu.js"></script>
+
+<script src="node_defs.js"></script>
+
+<script  type="text/x-red" data-container-name="InputOutputCompatibilityMetadata">
+	{"requirements":[
+		{"type":"AudioInputI2S",         "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioInputI2S",         "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputI2S",         "resource":"IN1 Pin",       "shareable":false},
+		{"type":"AudioInputI2SQuad",     "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioInputI2SQuad",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputI2SQuad",     "resource":"IN1 Pin",       "shareable":false},
+		{"type":"AudioInputI2SQuad",     "resource":"OUT1D Pin",     "shareable":false},
+		{"type":"AudioInputI2SHex",      "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioInputI2SHex",      "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputI2SHex",      "resource":"IN1 Pin",       "shareable":false},
+		{"type":"AudioInputI2SHex",      "resource":"OUT1D Pin",     "shareable":false},
+		{"type":"AudioInputI2SHex",      "resource":"OUT1C Pin",     "shareable":false},
+		{"type":"AudioInputI2SOct",      "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioInputI2SOct",      "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputI2SOct",      "resource":"IN1 Pin",       "shareable":false},
+		{"type":"AudioInputI2SOct",      "resource":"OUT1D Pin",     "shareable":false},
+		{"type":"AudioInputI2SOct",      "resource":"OUT1C Pin",     "shareable":false},
+		{"type":"AudioInputI2SOct",      "resource":"OUT1B Pin",     "shareable":false},
+		{"type":"AudioInputI2Sslave",    "resource":"I2S Device",    "shareable":true,  "setting":"I2S Slave"},
+		{"type":"AudioInputI2Sslave",    "resource":"Sample Rate",   "shareable":true,  "setting":"LRCLK1 Control"},
+		{"type":"AudioInputI2Sslave",    "resource":"IN1 Pin",       "shareable":false},
+		{"type":"AudioInputI2S2",        "resource":"I2S2 Device",   "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioInputI2S2",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputI2S2",        "resource":"IN2 Pin",       "shareable":false},
+		{"type":"AudioInputSPDIF3",      "resource":"SPDIF Device",  "shareable":true,  "setting":"SPDIF Protocol"},
+		{"type":"AudioInputSPDIF3",      "resource":"Sample Rate",   "shareable":true,  "setting":"SPDIF Control"},
+		{"type":"AudioInputSPDIF3",      "resource":"SPDIFIN Pin",   "shareable":false},
+		{"type":"AsyncAudioInputSPDIF3", "resource":"SPDIF Device",  "shareable":true,  "setting":"SPDIF Protocol"},
+		{"type":"AsyncAudioInputSPDIF3", "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AsyncAudioInputSPDIF3", "resource":"SPDIFIN Pin",   "shareable":false},
+		{"type":"AudioInputAnalog",      "resource":"ADC1",          "shareable":false},
+		{"type":"AudioInputAnalog",      "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputAnalogStereo","resource":"ADC1",          "shareable":false},
+		{"type":"AudioInputAnalogStereo","resource":"ADC2",          "shareable":false},
+		{"type":"AudioInputAnalogStereo","resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputPDM",         "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioInputPDM",         "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputPDM",         "resource":"IN1 Pin",       "shareable":false},
+		{"type":"AudioInputPDM2",        "resource":"I2S2 Device",   "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioInputPDM2",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputPDM2",        "resource":"IN2 Pin",       "shareable":false},
+		{"type":"AudioInputTDM",         "resource":"I2S Device",    "shareable":true,  "setting":"TDM Protocol"},
+		{"type":"AudioInputTDM",         "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputTDM",         "resource":"IN1 Pin",       "shareable":false},
+		{"type":"AudioInputTDM2",        "resource":"I2S2 Device",   "shareable":true,  "setting":"TDM Protocol"},
+		{"type":"AudioInputTDM2",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioInputTDM2",        "resource":"IN2 Pin",       "shareable":false},
+		{"type":"AudioInputUSB",         "resource":"USB Rx Endpoint","shareable":false},
+		{"type":"AudioOutputI2S",        "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioOutputI2S",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputI2S",        "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputI2SQuad",    "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioOutputI2SQuad",    "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputI2SQuad",    "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputI2SQuad",    "resource":"OUT1B Pin",     "shareable":false},
+		{"type":"AudioOutputI2SHex",     "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioOutputI2SHex",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputI2SHex",     "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputI2SHex",     "resource":"OUT1B Pin",     "shareable":false},
+		{"type":"AudioOutputI2SHex",     "resource":"OUT1C Pin",     "shareable":false},
+		{"type":"AudioOutputI2SOct",     "resource":"I2S Device",    "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioOutputI2SOct",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputI2SOct",     "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputI2SOct",     "resource":"OUT1B Pin",     "shareable":false},
+		{"type":"AudioOutputI2SOct",     "resource":"OUT1C Pin",     "shareable":false},
+		{"type":"AudioOutputI2SOct",     "resource":"OUT1D Pin",     "shareable":false},
+		{"type":"AudioOutputI2Sslave",   "resource":"I2S Device",    "shareable":true,  "setting":"I2S Slave"},
+		{"type":"AudioOutputI2Sslave",   "resource":"Sample Rate",   "shareable":true,  "setting":"LRCLK1 Control"},
+		{"type":"AudioOutputI2Sslave",   "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputI2S2",       "resource":"I2S2 Device",   "shareable":true,  "setting":"I2S Master"},
+		{"type":"AudioOutputI2S2",       "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputI2S2",       "resource":"OUT2 Pin",      "shareable":false},
+		{"type":"AudioOutputSPDIF",      "resource":"I2S Device",    "shareable":true,  "setting":"SPDIF Protocol"},
+		{"type":"AudioOutputSPDIF",      "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputSPDIF",      "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputSPDIF2",     "resource":"I2S2 Device",   "shareable":true,  "setting":"SPDIF Protocol"},
+		{"type":"AudioOutputSPDIF2",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputSPDIF2",     "resource":"OUT2 Pin",      "shareable":false},
+		{"type":"AudioOutputSPDIF3",     "resource":"SPDIF Device",  "shareable":true,  "setting":"SPDIF Protocol"},
+		{"type":"AudioOutputSPDIF3",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputSPDIF3",     "resource":"SPDIFOUT Pin",  "shareable":false},
+		{"type":"AudioOutputPT8211",     "resource":"I2S Device",    "shareable":true,  "setting":"PT8211 Protocol"},
+		{"type":"AudioOutputPT8211",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputPT8211",     "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputPT8211_2",   "resource":"I2S2 Device",   "shareable":true,  "setting":"PT8211 Protocol"},
+		{"type":"AudioOutputPT8211_2",   "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputPT8211_2",   "resource":"OUT2 Pin",      "shareable":false},
+		{"type":"AudioOutputAnalog",     "resource":"DAC1",          "shareable":false},
+		{"type":"AudioOutputAnalog",     "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputAnalogStereo","resource":"DAC1",         "shareable":false},
+		{"type":"AudioOutputAnalogStereo","resource":"DAC2",         "shareable":false},
+		{"type":"AudioOutputAnalogStereo","resource":"Sample Rate",  "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputPWM",        "resource":"PWM",           "shareable":false},
+		{"type":"AudioOutputPWM",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputMQS",        "resource":"MSQ Device",    "shareable":false},
+		{"type":"AudioOutputMQS",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputTDM",        "resource":"I2S Device",    "shareable":true,  "setting":"TDM Protocol"},
+		{"type":"AudioOutputTDM",        "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputTDM",        "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputTDM2",       "resource":"I2S2 Device",   "shareable":true,  "setting":"TDM Protocol"},
+		{"type":"AudioOutputTDM2",       "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputTDM2",       "resource":"OUT2 Pin",      "shareable":false},
+		{"type":"AudioOutputADAT",       "resource":"I2S Device",    "shareable":true,  "setting":"ADAT Protocol"},
+		{"type":"AudioOutputADAT",       "resource":"Sample Rate",   "shareable":true,  "setting":"Teensy Control"},
+		{"type":"AudioOutputADAT",       "resource":"OUT1A Pin",     "shareable":false},
+		{"type":"AudioOutputUSB",        "resource":"USB Tx Endpoint","shareable":false}
+	]}
+</script>
+
+</body>
+</html>
+

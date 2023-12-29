@@ -21,7 +21,6 @@
 #include <math.h>
 
 
-typedef int16_t value_type;
 
 // timeout multiplier
 const int SEC = 1000000000;
@@ -34,6 +33,10 @@ const int K = 1024;
 const int M = K * K;
 const int G = M * K;
 
+namespace QRND {
+
+
+typedef uint8_t value_type;
 
 
 const int S_PRODUCER = 0x100;
@@ -45,6 +48,7 @@ const int S_SENDING = 0x20;
 const int S_STALLED = 0x30;
 
 
+
 class Runnable;
 class Lockable;
 class Semaphore;
@@ -53,6 +57,10 @@ class Frame;
 class FrameStream;
 class Producer;
 class Consumer;
+
+
+void abort(const char *msg);
+void abort(std::string &msg);
 
 /**
  * A classic Mutex
@@ -252,11 +260,13 @@ public:
 
     /** post a Frame to the stream */
     void enqueue(Frame *);
+
     /** receive a Frame from the stream 
      *  @param timeout      timeout in nanoseconds
      *  @return             the next Frame
      */
     Frame *dequeue(long timeout);
+
     /** receive a Frame from the stream 
      *  @return             the next Frame
      */
@@ -353,32 +363,6 @@ public:
     }
 };
 
-/**
- * Usage statics of a Producer/Consumer
- * 
- * Keeps record of Data thruput and bandwidth.
- * 
- * The bandwidth stats will e updated on each tick
- * 
- * @see Node::tick()
- */
-struct Statistics {
-    long input_bytes_processed;
-    long input_bandwidth;
-
-    long ouput_bytes_processed;
-    long output_bandwidth;
-
-    Statistics() 
-        : input_bytes_processed(0), input_bandwidth(0), 
-          ouput_bytes_processed(0), output_bandwidth(0) { }
-    void tick() {
-        input_bandwidth = input_bytes_processed;
-        input_bytes_processed = 0;
-        output_bandwidth = ouput_bytes_processed;
-        ouput_bytes_processed = 0;
-    }
-};
 
 
 /**
@@ -411,7 +395,6 @@ public:
 
     std::vector<std::string> inputs;
     std::vector<std::string> outputs;
-    Statistics stats;
 
     Node(const char *name) { add_node(this); }
     ~Node() { remove_node(this); }   // note: this might be called twice for filters
@@ -434,9 +417,12 @@ protected:
 public:
     Consumer(const char *name) : Node(name) { }
     Consumer(std::string &name) : Consumer(name.c_str()) { }
-    virtual ~Consumer() { Node::~Node(); }
+    virtual ~Consumer() { 
+        Node::~Node(); 
+    }
 
     Frame *receive();
+    Frame *receive_when_available();
 
     virtual bool is_consumer() { return true; }
 };
@@ -481,6 +467,8 @@ public:
      */
     Frame *get_frame();
 
+    Frame *get_frame_if_available();
+
     /**
      * send a data-Frame to a consumer
      * 
@@ -503,6 +491,7 @@ public:
 
     void allocate_buffers(int size, int count);
 
+    void release_buffers();
 
     class Producer_Pipe {
     public:
@@ -519,7 +508,7 @@ public:
 
 class Filter : public Consumer, public Producer {
 public:
-    Filter(const char *name);
+    Filter(const char *name, int num_outputs);
     ~Filter();
 };
 
@@ -542,88 +531,6 @@ inline void operator >>(Producer::Producer_Pipe p, Consumer &c) {
 }
 
 
-class StreamSplitter : public Filter, public Runnable {
-
-protected:
-    void run();
-public:
-    StreamSplitter(const char *name, int num_outputs = 2);
-    ~StreamSplitter();
-};
-
-/**
- * A producer producing all zeros
- */
-class NullReader : public Producer, public Runnable {
-protected:
-    void run();
-public:
-    NullReader(const char *name, int buffersize = 8*K, int num_buffer = 8);
-    NullReader(std::string &name, int buffersize = 8*K, int num_buffer = 8) 
-        : NullReader(name.c_str(), buffersize, num_buffer) { }
-};
-
-
-/**
- * A producer using libc rand()
- */
-class RandReader : public Producer, public Runnable {
-private:
-    unsigned seed;
-protected:
-    void run();
-public:
-    RandReader(const char *name, int buffersize = 8*K, int num_buffer = 8);
-    RandReader(std::string &name, int buffersize = 8*K, int num_buffer = 8)
-        : RandReader(name.c_str(), buffersize, num_buffer) { }
-};
-
-
-
-/**
- * A consumer that does nothing
- */
-class NoWriter : public Consumer, public Runnable {
-public:
-    /** create a NoWriter */
-    NoWriter(const char *name);
-    NoWriter(std::string &name) 
-        : NoWriter(name.c_str()) { }
-protected:
-    /** the thread runner for a NoMangler */
-    void run();
-};
-
-
-/**
- * A filter, distributing its input to several outputs
- * 
- * It reads from its input and evenly distributes the FrameStream to its
- * outputs. 
- * 
- * Those output consumers thereafter may stream to a single stream by themself.
- * 
- * Main intention is to distribute workload over several execution threads.
- * 
- * Note that when doing so, there is no guaranty of the order, the  
- * processed buffers are send to the resulting output stream.
- * 
- */
-class StreamMangler : public Consumer, public Producer, public Runnable {
-private:
-    int next_output;    ///< next slot to send data to
-public:
-    /** create a StreamMangler
-     *  @param num_output   no. of output streams
-    */
-    StreamMangler(const char *name, int num_outputs);
-    StreamMangler(std::string &name, int num_outputs) 
-        : StreamMangler(name.c_str(), num_outputs) { }
-protected:
-    /** the thread runner for a StreamMangler */
-    void run();
-};
-
-
+} // end namespace
 
 #endif // __QRND_CORE_H__

@@ -4,6 +4,8 @@
 
 #include "qrnd-core.h"
 
+namespace QRND {
+
 /**
  * A producer reading from disk
  */
@@ -16,6 +18,7 @@ public:
     DiskReader(const char *name, const char *filename, int buffersize = 8*K, int num_buffer = 8);
     DiskReader(std::string &name, const char *filename, int buffersize = 8*K, int num_buffer = 8)
         : DiskReader(name.c_str(), filename, buffersize, num_buffer) { }
+    virtual ~DiskReader();
 };
 
 
@@ -27,7 +30,7 @@ public:
     ZeroReader(const char *name, int buffersize = 8*K, int num_buffer = 8);
     ZeroReader(std::string &name, int buffersize = 8*K, int num_buffer = 8)
         : ZeroReader(name.c_str(), buffersize, num_buffer) { }
-
+    virtual ~ZeroReader();
 };
 
 /**
@@ -38,6 +41,7 @@ public:
     RandomReader(const char *name, int buffersize = 8*K, int num_buffer = 8);
     RandomReader(std::string &name, int buffersize = 8*K, int num_buffer = 8)
         : RandomReader(name.c_str(), buffersize, num_buffer) { }
+    virtual ~RandomReader();
 };
 
 /**
@@ -52,6 +56,7 @@ public:
     DiskWriter(const char *name, const char *filename);
     DiskWriter(std::string &name, const char *filename) 
         : DiskWriter(name.c_str(), filename) { }
+    virtual ~DiskWriter();
 protected:
     /** the thread runner for a DiskWriter */
     void run();
@@ -66,6 +71,9 @@ public:
     NullWriter(const char *name);
     NullWriter(std::string &name) 
         : NullWriter(name.c_str()) { }
+    virtual ~NullWriter();
 };
+
+} // end namespace
 
 #endif //__QRND_DISK_H__

@@ -4,7 +4,7 @@
 
 #include "qrnd-core.h"
 
-class Fauchinger : public Consumer, public Producer, public Runnable {
+class Fauchinger : public QRND::Filter, public QRND::Runnable {
 private:
     unsigned N, L;
     uint64_t *m;

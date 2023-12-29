@@ -55,7 +55,7 @@ static void extract(const unsigned N, uint64_t const *in,
 }
 
 Fauchinger::Fauchinger(const char *name, int input_bits, int output_bits, const char *m_matrix_file)
-    : Consumer(name), Producer(name, 1),
+    : QRND::Filter(name),
       N(input_bits), L(output_bits)
 {
     read_m_matrix(m_matrix_file);
@@ -68,13 +68,13 @@ void Fauchinger::read_m_matrix(const char *filename) {
 
     int fd = open(filename, O_RDONLY);
     if (fd<0) {
-        throw "cannot open m_matrix_file for reading";
+        throw "cannot open seed file for reading";
     }
     uint8_t *p = (uint8_t *) m;
     while (sz>0) {
         int n = read(fd, p, sz);
         if (n<0) {
-            throw "short read on m_matrix_file";
+            throw "short read on  seed file";
         }
         sz -= n;
     }    
@@ -88,8 +88,8 @@ void Fauchinger::run() {
         if (is_stopped())
             break;
 
-        Frame *in_buffer = receive();
-        Frame *out_buffer = get_frame();
+        QRND::Frame *in_buffer = receive();
+        QRND::Frame *out_buffer = get_frame();
 
         assert(in_buffer->count <= N/64);
         assert(out_buffer->count <= L/64);
