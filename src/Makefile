@@ -92,6 +92,7 @@ clean:
 	rm -f *.o ls-ats ats-capture ATS-spy.so bin2seed std-seed.c
 	rm -f qrnd.a 
 
+dist-clean: clean
 
 
 
