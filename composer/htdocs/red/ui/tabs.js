@@ -91,9 +91,17 @@ RED.tabs = (function() {
 		return {
 			addTab: function(tab) {
 				tabs[tab.id] = tab;
-				var li = $("<li/>",{class:"red-ui-tab"}).appendTo(ul);
+				let console_tab = ul.find("a[href='#console']");
+				//console.log(console_tab)
+
+				var li = $("<li/>",{class:"red-ui-tab"});
 				var link = $("<a/>",{href:"#"+tab.id, class:"red-ui-tab-label"}).appendTo(li);
 				link.html(tab.label);
+
+				if (console_tab.length>0)
+					console_tab.parent().before(li);
+				else
+					li.appendTo(ul);
 				
 				link.on("click",onTabClick);
 				link.on("dblclick",onTabDblClick);

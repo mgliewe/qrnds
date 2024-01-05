@@ -241,7 +241,7 @@ RED.nodes = (function() {
 			var rmlinks = removeNode(removedNodes[n].id);
 			removedLinks = removedLinks.concat(rmlinks);
 		}
-		return {nodes:removedNodes,links:removedLinks};
+		return { nodes:removedNodes, links:removedLinks};
 	}
 
 	function getAllFlowNodes(node) {
@@ -596,7 +596,7 @@ RED.nodes = (function() {
 				//"DO NOT DEPLOY while in this state.<br/>Either, add missing types to Node-RED, restart and then reload page,<br/>or delete unknown "+n.name+", rewire as required, and then deploy.","error");
 			}
 */
-console.log("load", newNodes)
+			//console.log("load", newNodes)
 
 			for (i=0;i<newNodes.length;i++) {
 				n = newNodes[i];
@@ -650,7 +650,7 @@ console.log("load", newNodes)
 							wires:n.wires,
 							changed:false
 						};
-		console.log("load", node)
+		// console.log("load", node)
 						if (createNewIds) {
 							node.z = RED.view.getWorkspace();
 							node.id = getID();

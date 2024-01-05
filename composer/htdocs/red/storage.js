@@ -39,13 +39,12 @@ RED.storage = (function() {
 				data = JSON.parse(data);
 			else 
 				data = empty_project;
-			console.log("localStorage read: ", data);
+			// console.log("localStorage read: ", data);
 			RED.storage.filename = data.path;
 			RED.storage.name = data.name;
 			RED.nodes.import(data.nodes, false);
 			RED.view.redraw();
 			RED.history.clear();
-			RED.view.addConsole();
 		}
 	}
 	function clear() {
@@ -69,7 +68,7 @@ RED.storage = (function() {
 				if (js.signature!='QRND') {
 					return;
 				} 
-				console.log(js.nodes)
+				// console.log(js.nodes)
 				RED.view.clear()
 				localStorage.setItem("qrnd_composer", JSON.stringify(js));
 				load();

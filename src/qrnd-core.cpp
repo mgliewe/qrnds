@@ -11,6 +11,18 @@
 
 namespace QRND {
 
+unsigned long get_time() {
+    struct timespec spec;
+    unsigned long tm;
+
+    clock_gettime(CLOCK_REALTIME, &spec);
+
+    tm = spec.tv_sec * 1000;
+    tm += spec.tv_nsec / 1000000;
+
+    return tm;
+}
+
 Lockable::Lockable() {
 	int status = pthread_mutex_init(&mutex, NULL);
 	assert (0 == status );
@@ -219,6 +231,9 @@ Frame *FrameStream::dequeue(long timeout) {
         _first = b->link;
         b->link = 0;
     }
+    if (b==_last) {
+        _last = 0;
+    }
     unlock();
     return b;
 }
@@ -302,6 +317,7 @@ Producer::~Producer() {
 }
 
 void Producer::add_frame(Frame *frame) {
+    assert(frame!=0);
     free_buffers.enqueue(frame);
     frame->alloc_link = this->allocated_buffer;
     this->allocated_buffer = frame;
@@ -310,6 +326,8 @@ void Producer::add_frame(Frame *frame) {
 Frame *Producer::get_frame() {
     state |= S_STALLED;
     Frame *b = free_buffers.dequeue();
+    if (b)
+        b->count = 0;
     state &= ~S_STALLED;
     return b;
 }

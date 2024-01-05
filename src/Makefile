@@ -11,7 +11,8 @@ LXXOPT += -L../lib -lATSApi
 WSSERVER_FILES = wsServer/base64.o wsServer/sha1.o  wsServer/utf8.o \
 				 wsServer/handshake.o wsServer/ws.o
 CJSON_FILES = cJSON/cJSON.o  cJSON/cJSON_Utils.o
-QRND_FILES = qrnd-core.o qrnd-base.o qrnd-disk.o qrnd-measurement.o qrnd-ui.o
+QRND_FILES = qrnd-core.o qrnd-base.o qrnd-disk.o qrnd-measurement.o qrnd-ui.o \
+			 gaussian.o
 
 
 all: ats-tools qrnd.a node_defs.js qrnd-test
@@ -31,6 +32,8 @@ qrnd-base.o: qrnd-base.cpp qrnd-base.h qrnd-core.h
 qrnd-measurement.o: qrnd-measurement.cpp qrnd-measurement.h qrnd-core.h
 	$(CXX) $(CXXFLAGS) -c qrnd-measurement.cpp
 
+gaussian.o: gaussian.cpp gaussian.h qrnd-core.h
+	$(CXX) $(CXXFLAGS) -c gaussian.cpp
 
 
 fauchinger.o: fauchinger.cpp fauchinger.h qrnd-core.h

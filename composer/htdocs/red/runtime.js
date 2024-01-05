@@ -128,6 +128,155 @@ RED.runtime = (function() {
         setTimeout(terminal.fit,100);
     }
 
+    var diagrams;
+    var data_timeout;
+
+    function open_diagrams() {
+
+        RED.diagram.destroyDiagrams();
+        let nodes = RED.nodes.createCompleteNodeSet();
+        for(let i=0; i<nodes.length; ++i) {
+            if (nodes[i].type == 'LineDiagram') {
+                RED.diagram.createDiagram(nodes[i]);
+            }
+        }
+        refresh_data();
+    }
+
+    function refresh_data() {
+        rpc("","get_data").then(
+            (ds) => {
+                RED.diagram.setData(ds);
+                if (RED.runtime.runstate!='STOPPED')
+                    setTimeout(refresh_data, 500);
+            }
+        );
+    }
+
+    function open_diagrams_old() {
+
+        RED.diagram.destroyDiagrams();
+        let nodes = RED.nodes.createCompleteNodeSet();
+        for(let i=0; i<nodes.length; ++i) {
+            if (nodes[i].type == 'LineDiagram') {
+                RED.diagram.createDiagram(nodes[i]);
+            }
+        }
+
+
+        $("#node-dialog-diagram").empty();
+        diagrams = { };
+        //let nodes = RED.nodes.createCompleteNodeSet();
+        for(let i=0; i<nodes.length; ++i) {
+            if (nodes[i].type == 'LineDiagram') {
+                let n = nodes[i];
+                let node =  RED.nodes.node(n.id);
+                let name = make_name(n);
+
+                console.log({ n:n, node:node, name:name});  
+
+                let diagram = $("<canvas style='flex:1' id='diagram-" + name + "-canvas' class='diagram-canvas'></canvas>");
+
+                $("#node-dialog-diagram").append(diagram);
+
+                let datasets = [ ]
+                let links = RED.nodes.links;
+                console.log(links);
+                let colors = [ '#800', '#00f', '#0ff', '#f00'];
+                let bgcolors = [ '#f44', '#f00f', '#f0ff', '#ff00'];
+                let ports = [ ];
+                for (let l=0; l<links.length; ++l) {
+                    if (links[l].target === node) {
+                        let port = parseInt(links[l].targetPort);
+                        console.log(links[l]);
+                        datasets.push({
+                            port: port,
+                            label: (port+1) + ': ' + links[l].source.name + '.' + links[l].sourcePort,
+                            id: name+'_buffer_' + port,
+                            borderColor: colors[port],
+                            backgroundColor: colors[port],
+                            data: [ ]
+                        })
+                    }
+                }
+                console.log(datasets);
+
+                let labels=[];
+                for (n=0; n<node.buffersize; ++n)
+                    labels.push(n);   
+
+                let canvas = diagram.get(0);
+                let chart = new Chart(canvas, {
+                        type: "line",
+                        data: {
+                            labels: labels,
+                            datasets: datasets
+                        },
+                        options: {
+                            animation: false,
+
+                            responsive: true,
+                            plugins: {
+                                legend: {
+                                    position: 'top'
+                                },
+                                title: {
+                                    display: true,
+                                    text: name
+                                }
+                            },
+                            interactions: {
+                                mode: 'index',
+                                intersect: false
+                            },
+                            scales: {
+                                x: {
+                                    display: true,
+                                },
+                                y: {
+                                    display: true,
+                                    min:0,
+                                    max: 256
+                                }
+                            }
+                        }
+                    }
+                );
+                diagrams[name] = {name: name, chart: chart, datasets: datasets};
+            }
+        }
+
+        console.log(diagrams);
+        load_data();
+    }
+
+    function load_data() {
+        rpc("","get_data").then(
+            datasets => {
+                for( let name in datasets) {
+                    let dataset = datasets[name];
+                    let diagram = diagrams[name];
+                    console.log(diagram, dataset);
+
+                    for (let ds in diagram.datasets) {
+                        let port = diagram.datasets[ds].port;
+                        diagram.datasets[ds].data = dataset[port];
+                    }
+                    diagram.chart.update();
+                }
+                if (RED.runtime.runstate!='STOPPED')
+                    data_timeout = setTimeout(() => {
+                        load_data() 
+                        }, 500);
+            }   
+        )
+
+    }
+
+    function close_diagrams() {
+
+    }
+
     function set_runstate(is_running) {
         if (is_running && RED.runtime.runstate!="RUNNING") {
             RED.runtime.runstate = "RUNNING"
@@ -140,29 +289,7 @@ RED.runtime = (function() {
             RED.enable_menu("run-deploy", false);
             RED.enable_menu("run-stop", true);
 
-            let nodes = RED.nodes.createCompleteNodeSet();
-            for(let i=0; i<nodes.length; ++i) {
-                if (nodes[i].type == 'LineDiagram') {
-                    let n = nodes[i];
-                    let node =  RED.nodes.node(n.id);
-                    let name = make_name(n);
-
-                    console.log({ n:n, node:node, name:name});
-
-                    let diagram = $("<div style='display:none' class='diagram-window' id='diagram-" + name + "-window'>"
-                                  + "<canvas id='diagram-" + name + "-canvas' class='diagram-canvas'></canvas>"
-                                  + "</div>");
-                    $("document").append(diagram);
-                    diagram.dialog({
-                        title: name,
-                        open: function() {
-                        },
-                        close: function() {
-                        }
-                    });
-                    diagram.dialog("open")
-                }
-            }
+            open_diagrams();
 
         } else if (RED.runtime.runstate!="STOPPED") {
             RED.runtime.runstate = "STOPPED"
@@ -177,7 +304,7 @@ RED.runtime = (function() {
             RED.enable_menu("run-deploy", true);
             RED.enable_menu("run-stop", false);
 
-            $('.diagram-window').dialog('close').remove();
+            close_diagrams();
         }
     }
 
@@ -210,7 +337,7 @@ RED.runtime = (function() {
                     terminal_socket.send(JSON.stringify({
                         action: "start", 
                         command: "cd $HOME/" + p.dir + ";" 
-                               + "c++ $CXX_FLAGS -o " + p.name + " " + p.name + ".cpp $QRND_LIBS"
+                               + "c++ -g $CXX_FLAGS -o " + p.name + " " + p.name + ".cpp $QRND_LIBS"
                                + "&& ./" + p.name
                     }));                    
                });
@@ -283,7 +410,7 @@ RED.runtime = (function() {
         for (var i=0; i<nns.length; i++) {
             var n = nns[i];
             var node = RED.nodes.node(n.id);
-            if (n.type != 'tab' && n.type != 'console') {
+            if (n.type != 'tab' && n.type != 'console' && n.type != 'diagram') {
                 if (n.type=='LineDiagram') {
                     var name = make_name(n)
                     cpp += "\tFrameBuffer *" + name + "_buffer_0 = 0;\n";    
@@ -322,13 +449,13 @@ RED.runtime = (function() {
             var node = RED.nodes.node(n.id);
             if (n.type=='LineDiagram') {
                 var name = make_name(n);
-                console.log({node:node})
+                // console.log({node:node})
                 cpp += "\t\t" + name + "_buffer_0 = new FrameBuffer(\"" + name + "_buffer_0\");\n";
                 cpp += "\t\t" + name + "_buffer_1 = new FrameBuffer(\"" + name + "_buffer_1\");\n";
                 cpp += "\t\t" + name + "_buffer_2 = new FrameBuffer(\"" + name + "_buffer_2\");\n";
                 cpp += "\t\t" + name + "_buffer_3 = new FrameBuffer(\"" + name + "_buffer_3\");\n";
 
-            } else  if (n.type != 'tab' && n.type != 'console') {
+            } else  if (n.type != 'tab' && n.type != 'console' && n.type != 'diagram') {
                 var name = make_name(n);
                 cpp += "\t\t" + name + " = new " + n.type + '(';
                 for (let c in node._def.constructor) {
@@ -348,7 +475,7 @@ RED.runtime = (function() {
 
                 for (let p in node._def.defaults) {
                     let prop = node._def.defaults[p];
-                    console.log({prop:prop, node:node})
+                    // console.log({prop:prop, node:node})
                     if (!prop.attributes.ctr) {
                         if (node[prop.name]) {
                             cpp += "\t\t" + name + "->set_" + prop.name + "(";
@@ -376,7 +503,7 @@ RED.runtime = (function() {
                 var src_name = make_name(n);
                 for (var j=0; j<n.wires.length; j++) {
                     var wire = n.wires[j][0];
-                    console.log(wire)
+                    // console.log(wire)
                     if (wire) {
                         var parts = wire.split(":")
                         var dst = RED.nodes.node(parts[0]);
@@ -406,7 +533,7 @@ RED.runtime = (function() {
         for (var i=0; i<nns.length; i++) {
             var n = nns[i];
             var node = RED.nodes.node(n.id);
-            if (n.type != 'tab' && n.type != 'console' && n.type!='LineDiagram') {
+            if (n.type != 'tab' && n.type != 'console'  && n.type != 'diagram' && n.type!='LineDiagram') {
                 var name = make_name(n)
                 cpp += '\t\tjs_set(values, "' + name + '", ' + name + '->get_values());\n'
             }       
@@ -424,27 +551,25 @@ RED.runtime = (function() {
                 var name = make_name(n)
 
                 cpp += '\t\tdata = js_array();\n'
+
                     + '\t\tif (' + name + '_buffer_0) {\n'
                     + '\t\t\tjs_push(data, ' + name + '_buffer_0->get_data());\n'
                     + '\t\t} else {\n'
                     + '\t\t\tjs_push(data, js_array());\n'
-                    + '\t\t}\n';
+                    + '\t\t}\n'
 
-                cpp += '\t\tdata = js_array();\n'
                     + '\t\tif (' + name + '_buffer_1) {\n'
                     + '\t\t\tjs_push(data, ' + name + '_buffer_1->get_data());\n'
                     + '\t\t} else {\n'
                     + '\t\t\tjs_push(data, js_array());\n'
-                    + '\t\t}\n';
+                    + '\t\t}\n'
 
-                cpp += '\t\tdata = js_array();\n'
                     + '\t\tif (' + name + '_buffer_2) {\n'
                     + '\t\t\tjs_push(data, ' + name + '_buffer_2->get_data());\n'
                     + '\t\t} else {\n'
                     + '\t\t\tjs_push(data, js_array());\n'
-                    + '\t\t}\n';
+                    + '\t\t}\n'
 
-                cpp += '\t\tdata = js_array();\n'
                     + '\t\tif (' + name + '_buffer_3) {\n'
                     + '\t\t\tjs_push(data, ' + name + '_buffer_3->get_data());\n'
                     + '\t\t} else {\n'
@@ -467,7 +592,7 @@ RED.runtime = (function() {
                 cpp += "\t\t" + name + "_buffer_1->start();\n";
                 cpp += "\t\t" + name + "_buffer_2->start();\n";
                 cpp += "\t\t" + name + "_buffer_3->start();\n";
-            } else if (n.type != 'tab' && n.type != 'console') {
+            } else if (n.type != 'tab' && n.type != 'console' && n.type != 'diagram') {
                 var name = make_name(n)
                 cpp += "\t\t" + name + "->start();\n";
             }
@@ -485,7 +610,7 @@ RED.runtime = (function() {
                 cpp += "\t\t" + name + "_buffer_1->pause();\n";
                 cpp += "\t\t" + name + "_buffer_2->pause();\n";
                 cpp += "\t\t" + name + "_buffer_3->pause();\n";
-            } else if (n.type != 'tab' && n.type != 'console') {
+            } else if (n.type != 'tab' && n.type != 'console' && n.type != 'diagram') {
                 var name = make_name(n)
                 cpp += "\t\t" + name + "->pause();\n";
             }
@@ -503,7 +628,7 @@ RED.runtime = (function() {
                 cpp += "\t\t" + name + "_buffer_1->resume();\n";
                 cpp += "\t\t" + name + "_buffer_2->resume();\n";
                 cpp += "\t\t" + name + "_buffer_3->resume();\n";
-            } else if (n.type != 'tab' && n.type != 'console') {
+            } else if (n.type != 'tab' && n.type != 'console' && n.type != 'diagram') {
                 var name = make_name(n)
                 cpp += "\t\t" + name + "->resume();\n";
             }
@@ -521,7 +646,7 @@ RED.runtime = (function() {
                 cpp += "\t\t" + name + "_buffer_1->stop();\n";
                 cpp += "\t\t" + name + "_buffer_2->stop();\n";
                 cpp += "\t\t" + name + "_buffer_3->stop();\n";
-            } else if (n.type != 'tab' && n.type != 'console') {
+            } else if (n.type != 'tab' && n.type != 'console' && n.type != 'diagram') {
                 var name = make_name(n)
                 cpp += "\t\t" + name + "->stop();\n";
             }
@@ -536,7 +661,7 @@ RED.runtime = (function() {
                 cpp += "\t\tdelete " + name + "_buffer_1;\n";
                 cpp += "\t\tdelete " + name + "_buffer_2;\n";
                 cpp += "\t\tdelete " + name + "_buffer_3;\n";
-            } else if (n.type != 'tab' && n.type != 'console') {
+            } else if (n.type != 'tab' && n.type != 'console' && n.type != 'diagram') {
                 var name = make_name(n)
                 cpp += "\t\tdelete " + name + ";\n";
             }

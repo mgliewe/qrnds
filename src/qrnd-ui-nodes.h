@@ -1,6 +1,6 @@
 #include "qrnd.h"
 #include "qrnd-ui.h"
-
+#include "gaussian.h"
 
 #ifndef __QRND_UI_NODES_H__
 #define __QRND_UI_NODES_H__
@@ -11,7 +11,20 @@
  * 
  * @ui-class        LineDiagram
  * @ui-summary                      A line diagram with 4 inputs.
+ * @ui-description                  A diagram display in composer. Each input connects to a FrameBuffer,
+ * @ui-description                  holding the last recent Frame.  
  * @ui-name         LineDiagram
+ * @ui-property     buffersize      number imutable
+ * @ui-comment                      Number of datapooints in diagram                      
+ * @ui-default      1024
+ * @ui-property     display-tab     string imutable
+ * @ui-comment                      The Tab, where to show the disgram in composer                      
+ * @ui-property     flex-flow       string imutable
+ * @ui-comment                      A css style to render the diagram container                      
+ * @ui-property     flex            string imutable
+ * @ui-comment                      A css style to render the diagram                      
+ * @ui-property     flex-order      string imutable
+ * @ui-comment                      A css style to order the diagrams in its container                      
  * @ui-inputs       4
  * @ui-input                        the first input
  * @ui-input                        the second input
@@ -44,8 +57,10 @@ public:
         QRND::Frame *frame = QRND::FrameBuffer::get_data();
         cJSON *result = js_array();
 
-        for(int n=0; n<frame->count; ++n) {
-            js_push(result, frame->data[n]);
+        if (frame) {
+            for(int n=0; n<frame->count; ++n) {
+                js_push(result, frame->data[n]);
+            }
         }
 
         QRND::FrameBuffer::release_data();
@@ -131,6 +146,55 @@ public:
     }
 
 };
+
+
+/** 
+ * @ui-class        GaussianProducer
+ * @ui-summary                      A producer producing a normal distributed signal
+ * @ui-description                  using an entropy source. It uses a modified Box-Muller transformation.
+ * @ui-description                  This producer is mainly intended for testing purposes.
+ * @ui-name         GaussianProducer
+ * @ui-property     name            name ctr imutable
+ * @ui-comment                      The class name shown in Composer                      
+ * @ui-property     buffersize      number ctr imutable
+ * @ui-default      32768
+ * @ui-comment                      Framesize for the output stream
+ * @ui-property     num_buffer      number ctr imutable
+ * @ui-comment                      Number of preallocated Frames                                         
+ * @ui-default      16
+ * @ui-property     mean            number
+ * @ui-comment                      The mean value                           
+ * @ui-default      127
+ * @ui-property     derivation      number
+ * @ui-comment                      The standard derivation of the mean value      
+ * @ui-default      100
+ * @ui-inputs       1
+ * @ui-input                        the entropy source
+ * @ui-outputs      1
+ * @ui-output                       the output stream
+ * @ui-category     producer
+ * @ui-color        #E6E0F8
+ * @ui-icon         arrow-in.png
+ */
+class GaussianProducer : public Node, public QRND::GaussianProducer {
+public:
+    GaussianProducer(std::string &name, int buffersize = 8*K, int num_buffer = 8)
+        : GaussianProducer(name.c_str(), buffersize, num_buffer) { }
+    GaussianProducer(const char *name, int buffersize = 8*K, int num_buffer = 8)
+        : UI::Node(name), QRND::GaussianProducer(name, buffersize, num_buffer) { }
+    virtual ~GaussianProducer() { }
+
+    virtual cJSON *get_values() {
+        cJSON *json = UI::Node::get_values();
+        js_set(json, "buffersize", buffersize);
+        js_set(json, "num_buffer", num_buffer);
+        js_set(json, "mean", (int) mean);
+        js_set(json, "derivation", (int) stddev);
+        return json;
+    }
+
+};
+
 
 
 /** 
@@ -367,6 +431,55 @@ public:
         return json;
     }
 };
+
+
+/** 
+ * @ui-class        Derivation
+ * @ui-summary                      A filter, calculating mean amplitude and derivation of a signal.
+ * @ui-name         Derivation
+ * @ui-property     name            name ctr imutable
+ * @ui-comment                      The class name shown in Composer
+ * @ui-property     buffersize      number ctr imutable 
+ * @ui-comment                      Framesize for the output stream
+ * @ui-default      1024
+ * @ui-property     num_buffer      number ctr imutable
+ * @ui-comment                      Number of preallocated Frames for output
+ * @ui-default      4
+ * @ui-property     windowsize      number mutable
+ * @ui-comment                      Windows size for measurement
+ * @ui-property     mean_value      number runtime
+ * @ui-comment                      calculated mean value
+ * @ui-property     derivation      number runtime
+ * @ui-comment                      calculated derivation
+ * @ui-default      32768
+ * @ui-inputs       1
+ * @ui-input                        the input stream
+ * @ui-outputs      3
+ * @ui-output                       the original input stream
+ * @ui-output                       Signal mean amplitude
+ * @ui-output                       Signal amplitude derivation
+ * @ui-category     measurement
+ * @ui-color        #E6E0F8
+ * @ui-icon         arrow-in.png
+ */
+class Derivation : public Node, public QRND::Derivation {
+public:
+    Derivation(std::string &name, int buffersize = 1024,int num_buffer = 8) 
+        : Derivation(name.c_str(), buffersize, num_buffer) { }
+    Derivation(const char *name, int buffersize = 1024, int num_buffer = 8) 
+        : UI::Node(name), QRND::Derivation(name, buffersize, num_buffer) { }
+    virtual ~Derivation() { }
+
+    virtual cJSON *get_values() {
+        cJSON *json = UI::Node::get_values();
+        js_set(json, "num_buffer", num_buffer);
+        js_set(json, "windowsize", windowsize);
+        js_set(json, "mean_value", get_mean());
+        js_set(json, "derivation", get_derivation());
+        return json;
+    }
+};
+
 
 } } // end namespace
 

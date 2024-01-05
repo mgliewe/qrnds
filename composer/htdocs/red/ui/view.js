@@ -232,16 +232,24 @@ RED.view = (function() {
 	var workspace_tabs = RED.tabs.create({
 		id: "workspace-tabs",
 		onchange: function(tab) {
+			// console.log('tab change', tab);
 			if (tab.type=='console') {
 				showConsole();
 				hideWorkspace();
+				RED.diagram.hideDiagrams();
+				return;
+			} else if (tab.type=='diagram') {
+				hideConsole();
+				hideWorkspace();
+				RED.diagram.showDiagram(tab.id);
 				return;
 			} else {
 				hideConsole();
+				RED.diagram.hideDiagrams();
 				showWorkspace();
 			}
 
-			console.log("workspace_tabs.change", tab)
+			// console.log("workspace_tabs.change", tab)
 			if (tab.type == "subflow") {
 				$("#workspace-toolbar").show();
 			} else {
@@ -326,11 +334,16 @@ RED.view = (function() {
 
 	function addConsole() {
 		var tabId = "console";
-		var ws = {type:"console",id:tabId,label:"console"};
+		var ws = {
+			type:"console",
+			id:tabId, 
+			label:"console"
+		};
 		RED.nodes.addWorkspace(ws);
 		workspace_tabs.addTab(ws);
 //		workspace_tabs.activateTab(tabId);
 	}
+
 
 	function addNewWorkspace() {
 		var tabId = RED.nodes.id();
@@ -2027,10 +2040,11 @@ console.log("mouse_down", d, portType, portIndex)
 
 		clear: clear,
 
+		addConsole: addConsole,
 		showConsole: showConsole, hideConsole: hideConsole,
+
 		showWorkspace: showWorkspace, hideWorkspace: hideWorkspace,
 
 		workspace_tabs: workspace_tabs,
-		addConsole: addConsole
 	};
 })();

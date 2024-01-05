@@ -70,6 +70,8 @@ protected:
  */
 class FrameBuffer : public Consumer, public Runnable {
     Frame *last_frame;
+    Lockable data_lock;
+    
 public:
     /** create a VoidSink */
     FrameBuffer(const char *name);

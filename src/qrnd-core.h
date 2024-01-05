@@ -58,6 +58,7 @@ class FrameStream;
 class Producer;
 class Consumer;
 
+unsigned long get_time();
 
 void abort(const char *msg);
 void abort(std::string &msg);

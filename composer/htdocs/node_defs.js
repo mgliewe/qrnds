@@ -9,8 +9,63 @@ RED.node_defs =
             "the fourth input"
         ],
         "output": [],
-        "defaults": {},
-        "description": [],
+        "defaults": {
+            "buffersize": {
+                "name": "buffersize",
+                "datatype": "number",
+                "attributes": {
+                    "imutable": true
+                },
+                "comment": [
+                    "Number of datapooints in diagram                      "
+                ],
+                "value": "1024"
+            },
+            "display-tab": {
+                "name": "display-tab",
+                "datatype": "string",
+                "attributes": {
+                    "imutable": true
+                },
+                "comment": [
+                    "The Tab, where to show the disgram in composer                      "
+                ]
+            },
+            "flex-flow": {
+                "name": "flex-flow",
+                "datatype": "string",
+                "attributes": {
+                    "imutable": true
+                },
+                "comment": [
+                    "A css style to render the diagram container                      "
+                ]
+            },
+            "flex": {
+                "name": "flex",
+                "datatype": "string",
+                "attributes": {
+                    "imutable": true
+                },
+                "comment": [
+                    "A css style to render the diagram                      "
+                ]
+            },
+            "flex-order": {
+                "name": "flex-order",
+                "datatype": "string",
+                "attributes": {
+                    "imutable": true
+                },
+                "comment": [
+                    "A css style to order the diagrams in its container                      "
+                ]
+            }
+        },
+        "description": [
+            "A diagram display in composer. Each input connects to a FrameBuffer,",
+            "holding the last recent Frame.  "
+        ],
         "constructor": [],
         "summary": "A line diagram with 4 inputs.",
         "shortName": "LineDiagram",
@@ -141,6 +196,86 @@ RED.node_defs =
         "summary": "A producer using libs rand() as its input.",
         "shortName": "RandProducer",
         "inputs": "0",
+        "outputs": "1",
+        "category": "producer",
+        "color": "#E6E0F8",
+        "icon": "arrow-in.png"
+    },
+    {
+        "classname": "GaussianProducer",
+        "input": [
+            "the entropy source"
+        ],
+        "output": [
+            "the output stream"
+        ],
+        "defaults": {
+            "name": {
+                "name": "name",
+                "datatype": "name",
+                "attributes": {
+                    "ctr": true,
+                    "imutable": true
+                },
+                "comment": [
+                    "The class name shown in Composer                      "
+                ]
+            },
+            "buffersize": {
+                "name": "buffersize",
+                "datatype": "number",
+                "attributes": {
+                    "ctr": true,
+                    "imutable": true
+                },
+                "comment": [
+                    "Framesize for the output stream"
+                ],
+                "value": "32768"
+            },
+            "num_buffer": {
+                "name": "num_buffer",
+                "datatype": "number",
+                "attributes": {
+                    "ctr": true,
+                    "imutable": true
+                },
+                "comment": [
+                    "Number of preallocated Frames                                         "
+                ],
+                "value": "16"
+            },
+            "mean": {
+                "name": "mean",
+                "datatype": "number",
+                "attributes": {},
+                "comment": [
+                    "The mean value                           "
+                ],
+                "value": "127"
+            },
+            "derivation": {
+                "name": "derivation",
+                "datatype": "number",
+                "attributes": {},
+                "comment": [
+                    "The standard derivation of the mean value      "
+                ],
+                "value": "100"
+            }
+        },
+        "description": [
+            "using an entropy source. It uses a modified Box-Muller transformation.",
+            "This producer is mainly intended for testing purposes."
+        ],
+        "constructor": [
+            "name",
+            "buffersize",
+            "num_buffer"
+        ],
+        "summary": "A producer producing a normal distributed signal",
+        "shortName": "GaussianProducer",
+        "inputs": "1",
         "outputs": "1",
         "category": "producer",
         "color": "#E6E0F8",
@@ -534,6 +669,98 @@ RED.node_defs =
         "shortName": "Histogram",
         "inputs": "1",
         "outputs": "2",
+        "category": "measurement",
+        "color": "#E6E0F8",
+        "icon": "arrow-in.png"
+    },
+    {
+        "classname": "Derivation",
+        "input": [
+            "the input stream"
+        ],
+        "output": [
+            "the original input stream",
+            "Signal mean amplitude",
+            "Signal amplitude derivation"
+        ],
+        "defaults": {
+            "name": {
+                "name": "name",
+                "datatype": "name",
+                "attributes": {
+                    "ctr": true,
+                    "imutable": true
+                },
+                "comment": [
+                    "The class name shown in Composer"
+                ]
+            },
+            "buffersize": {
+                "name": "buffersize",
+                "datatype": "number",
+                "attributes": {
+                    "ctr": true,
+                    "imutable": true
+                },
+                "comment": [
+                    "Framesize for the output stream"
+                ],
+                "value": "1024"
+            },
+            "num_buffer": {
+                "name": "num_buffer",
+                "datatype": "number",
+                "attributes": {
+                    "ctr": true,
+                    "imutable": true
+                },
+                "comment": [
+                    "Number of preallocated Frames for output"
+                ],
+                "value": "4"
+            },
+            "windowsize": {
+                "name": "windowsize",
+                "datatype": "number",
+                "attributes": {
+                    "mutable": true
+                },
+                "comment": [
+                    "Windows size for measurement"
+                ]
+            },
+            "mean_value": {
+                "name": "mean_value",
+                "datatype": "number",
+                "attributes": {
+                    "runtime": true
+                },
+                "comment": [
+                    "calculated mean value"
+                ]
+            },
+            "derivation": {
+                "name": "derivation",
+                "datatype": "number",
+                "attributes": {
+                    "runtime": true
+                },
+                "comment": [
+                    "calculated derivation"
+                ],
+                "value": "32768"
+            }
+        },
+        "description": [],
+        "constructor": [
+            "name",
+            "buffersize",
+            "num_buffer"
+        ],
+        "summary": "A filter, calculating mean amplitude and derivation of a signal.",
+        "shortName": "Derivation",
+        "inputs": "1",
+        "outputs": "3",
         "category": "measurement",
         "color": "#E6E0F8",
         "icon": "arrow-in.png"

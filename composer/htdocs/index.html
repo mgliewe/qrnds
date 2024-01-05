@@ -24,7 +24,7 @@
   limitations under the License.
 -->
 <head>
-<title>Audio System Design Tool for Teensy Audio Library</title>
+<title>QRND Composer</title>
 <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
 <link href="jquery/css/smoothness/jquery-ui-1.10.3.custom.min.css" rel="stylesheet" media="screen">
 <link href="jquery/css/jquery.simplefilebrowser.css" rel="stylesheet" media="screen">
@@ -35,25 +35,27 @@
 
 <link rel="stylesheet" type="text/css" href="xterm.js/xterm.css">
 <link rel="stylesheet" href="style.css">
+
 <style>
-table.doc {border-spacing:3px; border-collapse:separate; font-size: 80%}
-tr.top {background-color:#C0C0C0}
-tr.odd {background-color:#F0F0F0}
-tr.even {background-color:#E0E0E0}
-p.func {padding-bottom:0; margin:0px}
-p.desc {padding-left:2em; margin:0px; padding-top:0.2em; padding-bottom:0.8em; font-size:0.75em}
-p.exam {padding-left:2em; text-indent:-1.2em; margin:0px; padding-top:0; padding-bottom:0.5em; font-size:0.75em; font-weight:bold}
-pre.desc {padding-left:3em; margin:0px; padding-top:0em; padding-bottom:0.8em; font-size:0.75em;
-	background-color:#FFFFFF; border:0px; line-height:100%;
-}
-span.indent {padding-left:2em}
-span.literal { color: #006699}
-span.comment {color: #777755}
-span.keyword {color: #cc6600}
-span.function {color: #996600}
-span.mainfunction {color: #993300; font-weight: bolder}
+	table.doc {border-spacing:3px; border-collapse:separate; font-size: 80%}
+	tr.top {background-color:#C0C0C0}
+	tr.odd {background-color:#F0F0F0}
+	tr.even {background-color:#E0E0E0}
+	p.func {padding-bottom:0; margin:0px}
+	p.desc {padding-left:2em; margin:0px; padding-top:0.2em; padding-bottom:0.8em; font-size:0.75em}
+	p.exam {padding-left:2em; text-indent:-1.2em; margin:0px; padding-top:0; padding-bottom:0.5em; font-size:0.75em; font-weight:bold}
+	pre.desc {padding-left:3em; margin:0px; padding-top:0em; padding-bottom:0.8em; font-size:0.75em;
+		background-color:#FFFFFF; border:0px; line-height:100%;
+	}
+	span.indent {padding-left:2em}
+	span.literal { color: #006699}
+	span.comment {color: #777755}
+	span.keyword {color: #cc6600}
+	span.function {color: #996600}
+	span.mainfunction {color: #993300; font-weight: bolder}
 </style>
 </head>
+
 <body spellcheck="false">
 <div class="navbar navbar-inverse navbar-fixed-top">
 
@@ -181,6 +183,10 @@ span.mainfunction {color: #993300; font-weight: bolder}
 		</div>
 		<div class="xterm" id="node-dialog-console-terminal">
 		</div>
+		<div class="" id="node-red-diagrams">
+		</div>
+		<div class="" id="node-dialog-diagram">
+		</div>
 		</div>
 
 	<div id="chart-zoom-controls">
@@ -207,6 +213,18 @@ span.mainfunction {color: #993300; font-weight: bolder}
 		top: 30px;
 		bottom: 0;
 		display: none;
+	}
+	#node-dialog-diagram {
+		position: absolute;
+		right: 0;
+		left: 0;
+		top: 30px;
+		bottom: 0;
+		overflow: auto;
+		display: none;
+	}
+	#node-dialog-diagram canvas {
+		width: 500px;
 	}
 </style>
 
@@ -475,6 +493,8 @@ span.mainfunction {color: #993300; font-weight: bolder}
 <script src="xterm.js/xterm.js"></script>
 <script src="xterm.js/addon-fit.js"></script>
 
+<script src="chart.js/chart.js"></script>
+
 <script src="lib/path.js"></script>
 <script src="lib/vfs.js"></script>
 
@@ -491,6 +511,7 @@ span.mainfunction {color: #993300; font-weight: bolder}
 <script src="red/ui/tabs.js"></script>
 <script src="red/ui/view.js"></script>
 <script src="red/ui/sidebar.js"></script>
+<script src="red/ui/diagram.js"></script>
 <script src="red/ui/palette.js"></script>
 <script src="red/ui/tab-info.js"></script>
 <script src="red/ui/tab-config.js"></script>

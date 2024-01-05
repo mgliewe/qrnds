@@ -100,9 +100,11 @@ void FrameBuffer::run() {
         }
 
         Frame *new_frame = receive();
+        //data_lock.lock();
         if (last_frame)
             last_frame->give_back();
         last_frame = new_frame;
+        //data_lock.unlock();
 
         if (is_stopped())
             break;
@@ -110,7 +112,14 @@ void FrameBuffer::run() {
 }
 
 
+Frame *FrameBuffer::get_data() {
+    //data_lock.lock();
+    return last_frame;
+}
 
+void FrameBuffer::release_data() {
+    //data_lock.unlock();    
+}
 
 LazyForward::LazyForward(const char *name, int buffersize, int num_buffer)
     : Filter(name, 1), buffersize(buffersize), num_buffer(num_buffer)

@@ -257,6 +257,7 @@ var RED = (function() {
 				RED.nodes.registerType(json["type"], json["data"]);
 			})
 
+			
 			/*
 			var data = $.parseJSON($("script[data-container-name|='NodeDefinitions']").html());
 			var nodes = data["nodes"];
@@ -268,7 +269,11 @@ var RED = (function() {
 				showHelp();
 				d3.event.preventDefault();
 			});
+
 			loadNodes();
+
+			RED.view.addConsole();
+		
 			$(".palette-spinner").hide();
 
 		} else {
