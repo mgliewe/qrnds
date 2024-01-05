@@ -140,7 +140,6 @@ RED.runtime = (function() {
                 RED.diagram.createDiagram(nodes[i]);
             }
         }
-        refresh_data();
     }
 
     function refresh_data() {
@@ -153,129 +152,17 @@ RED.runtime = (function() {
         );
     }
 
-    function open_diagrams_old() {
-
-        RED.diagram.destroyDiagrams();
-        let nodes = RED.nodes.createCompleteNodeSet();
-        for(let i=0; i<nodes.length; ++i) {
-            if (nodes[i].type == 'LineDiagram') {
-                RED.diagram.createDiagram(nodes[i]);
-            }
-        }
-
-
-        $("#node-dialog-diagram").empty();
-        diagrams = { };
-        //let nodes = RED.nodes.createCompleteNodeSet();
-        for(let i=0; i<nodes.length; ++i) {
-            if (nodes[i].type == 'LineDiagram') {
-                let n = nodes[i];
-                let node =  RED.nodes.node(n.id);
-                let name = make_name(n);
-
-                console.log({ n:n, node:node, name:name});  
-
-                let diagram = $("<canvas style='flex:1' id='diagram-" + name + "-canvas' class='diagram-canvas'></canvas>");
-
-                $("#node-dialog-diagram").append(diagram);
-
-                let datasets = [ ]
-                let links = RED.nodes.links;
-                console.log(links);
-                let colors = [ '#800', '#00f', '#0ff', '#f00'];
-                let bgcolors = [ '#f44', '#f00f', '#f0ff', '#ff00'];
-                let ports = [ ];
-                for (let l=0; l<links.length; ++l) {
-                    if (links[l].target === node) {
-                        let port = parseInt(links[l].targetPort);
-                        console.log(links[l]);
-                        datasets.push({
-                            port: port,
-                            label: (port+1) + ': ' + links[l].source.name + '.' + links[l].sourcePort,
-                            id: name+'_buffer_' + port,
-                            borderColor: colors[port],
-                            backgroundColor: colors[port],
-                            data: [ ]
-                        })
-                    }
-                }
-                console.log(datasets);
-
-                let labels=[];
-                for (n=0; n<node.buffersize; ++n)
-                    labels.push(n);   
-
-                let canvas = diagram.get(0);
-                let chart = new Chart(canvas, {
-                        type: "line",
-                        data: {
-                            labels: labels,
-                            datasets: datasets
-                        },
-                        options: {
-                            animation: false,
-
-                            responsive: true,
-                            plugins: {
-                                legend: {
-                                    position: 'top'
-                                },
-                                title: {
-                                    display: true,
-                                    text: name
-                                }
-                            },
-                            interactions: {
-                                mode: 'index',
-                                intersect: false
-                            },
-                            scales: {
-                                x: {
-                                    display: true,
-                                },
-                                y: {
-                                    display: true,
-                                    min:0,
-                                    max: 256
-                                }
-                            }
-                        }
-                    }
-                );
-                diagrams[name] = {name: name, chart: chart, datasets: datasets};
-            }
-        }
-
-        console.log(diagrams);
-        load_data();
-    }
-
-    function load_data() {
-        rpc("","get_data").then(
-            datasets => {
-                for( let name in datasets) {
-                    let dataset = datasets[name];
-                    let diagram = diagrams[name];
-                    console.log(diagram, dataset);
-
-                    for (let ds in diagram.datasets) {
-                        let port = diagram.datasets[ds].port;
-                        diagram.datasets[ds].data = dataset[port];
-                    }
-                    diagram.chart.update();
-                }
+    function refresh_values() {
+        rpc("","get_values").then(
+            (values) => {
+                RED.nodes.updateNodeValues(values);
+                RED.sidebar.info.refresh();
                 if (RED.runtime.runstate!='STOPPED')
-                    data_timeout = setTimeout(() => {
-                        load_data() 
-                        }, 500);
-            }   
-        )
-
+                    setTimeout(refresh_values, 500);
+            }
+        );
     }
 
-    function close_diagrams() {
-
-    }
 
     function set_runstate(is_running) {
         if (is_running && RED.runtime.runstate!="RUNNING") {
@@ -290,6 +177,8 @@ RED.runtime = (function() {
             RED.enable_menu("run-stop", true);
 
             open_diagrams();
+            refresh_data();
+            refresh_values();
 
         } else if (RED.runtime.runstate!="STOPPED") {
             RED.runtime.runstate = "STOPPED"
@@ -303,8 +192,6 @@ RED.runtime = (function() {
             RED.enable_menu("edit-delete", true);
             RED.enable_menu("run-deploy", true);
             RED.enable_menu("run-stop", false);
-
-            close_diagrams();
         }
     }
 
@@ -319,13 +206,6 @@ RED.runtime = (function() {
         }));
     }
 
-    function x_run() {
-        show_terminal();
-        terminal_socket.send(JSON.stringify({
-            action: "start", command: "ps axf"
-        }));
-    }
-
     function run() {
         RED.storage.save_file(RED.storage.filename, () => {
             let cpp = generate_code();
@@ -334,9 +214,10 @@ RED.runtime = (function() {
             lib.vfs.writeFile(filename, cpp)
                .then(() => {
                     show_terminal();
+                    terminal.clear();
                     terminal_socket.send(JSON.stringify({
                         action: "start", 
-                        command: "cd $HOME/" + p.dir + ";" 
+                        command: "cd $QRND; make && cd $HOME/" + p.dir + " && " 
                                + "c++ -g $CXX_FLAGS -o " + p.name + " " + p.name + ".cpp $QRND_LIBS"
                                + "&& ./" + p.name
                     }));                    
@@ -476,7 +357,7 @@ RED.runtime = (function() {
                 for (let p in node._def.defaults) {
                     let prop = node._def.defaults[p];
                     // console.log({prop:prop, node:node})
-                    if (!prop.attributes.ctr) {
+                    if (!prop.attributes.ctr && !prop.attributes.runtime) {
                         if (node[prop.name]) {
                             cpp += "\t\t" + name + "->set_" + prop.name + "(";
                             let def = node._def.defaults[prop.name]

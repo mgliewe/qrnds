@@ -45,6 +45,8 @@ RED.diagram = (function() {
         for (n=0; n<node.buffersize; ++n)
             labels.push(n);   
 
+        rgb = (r,g,b) => r << 16|g<<8|b;
+
         let chart = new Chart(canvas.get(0), {
                 type: "line",
                 data: {
@@ -62,6 +64,27 @@ RED.diagram = (function() {
                         title: {
                             display: true,
                             text: name
+                        },
+                        zoom: {
+                            pan: {
+                                enabled: true,
+                                scaleMode: 'xy',
+                            },
+                            zoom: {
+                                mode: 'xy',
+                                wheel: {
+                                    enabled: true
+                                },
+                                drag: {
+                                    enabled: true,
+                                    modifierKey: 'ctrl',
+                                    borderColor: rgb(255,0,0),
+                                    backgroundColor: rgb(127,0,0),
+
+                                }
+
+                            }
+
                         }
                     },
                     interactions: {

@@ -207,6 +207,18 @@ RED.nodes = (function() {
 		return removedLinks;
 	}
 
+	function updateNodeValues(values) {
+		console.log(values);
+		for (var id in values) {
+			let node = getNode(id);
+			if (node) {
+				for (let prop in values[id]) {
+					node[prop] = values[id][prop];
+				}
+			}
+		}
+	}
+
 	function removeLink(l) {
 		var index = links.indexOf(l);
 		if (index != -1) {
@@ -734,6 +746,7 @@ RED.nodes = (function() {
 		addLink: addLink,
 		remove: removeNode,
 		removeLink: removeLink,
+		updateNodeValues:updateNodeValues,
 		addWorkspace: addWorkspace,
 		removeWorkspace: removeWorkspace,
 		workspace: getWorkspace,

@@ -18,12 +18,12 @@ FrameMeter::~FrameMeter() {
     release_buffers();
 }
 
-int FrameMeter::get_rms() {
+unsigned long FrameMeter::get_rms() {
     if (value_counter==0) return 0;
     return sqrt(rms_counter / value_counter);
 }
 
-int FrameMeter::get_avg() {
+unsigned long FrameMeter::get_avg() {
     if (value_counter==0) return 0;
     return avg_counter / value_counter;
 }
@@ -57,6 +57,9 @@ void FrameMeter::run() {
                 rms_out->data[rms_out->count++] = rms;
                 avg_out->data[avg_out->count++] = avg;
 
+                rms_counter = avg_counter = 0;
+                value_counter=0;
+
                 if (rms_out->count >= rms_out->capacity) {
                     send(1, rms_out);
                     rms_out = get_frame();
@@ -66,7 +69,6 @@ void FrameMeter::run() {
                     avg_out = get_frame();
                     assert( avg_out!=0 );
 
-                    value_counter=0;
                 }
 
             }
@@ -86,6 +88,10 @@ FrameCounter::~FrameCounter() {
     release_buffers();
 }
 
+void FrameCounter::set_windowsize(int sz) {
+    windowsize = sz;
+}
+
 void FrameCounter::run() {
 
     counter = 0;
@@ -98,6 +104,9 @@ void FrameCounter::run() {
             counter += f->count;
             while (counter>=windowsize) {
                 int bw = get_bandwidth();
+                timestamp = get_time();
+                counter = 0;
+
                 int e = 0;
                 while(bw>100) {
                     bw /= 10; e++;
@@ -110,18 +119,16 @@ void FrameCounter::run() {
                     out_bw = get_frame();
                     out_e = get_frame();
                 }
-                timestamp = get_time();
-                counter = 0;
             }
             send(0, f);
         }
     }
 }
 
-int FrameCounter::get_bandwidth() {
+unsigned long FrameCounter::get_bandwidth() {
     unsigned long tm = get_time();
     tm -= timestamp;
-    if (tm) return (unsigned long) counter * 1000000 / tm;
+    if (tm) return (unsigned long) counter * 1000 / tm;
     else return 0;
 }
 

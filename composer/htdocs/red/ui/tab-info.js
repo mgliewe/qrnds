@@ -46,7 +46,14 @@ RED.sidebar.info = (function() {
 		return value;
 	}
 	
+	var info_node;
+
 	function refresh(node) {
+		if (node) {
+			info_node = node;
+		} else {
+			node = info_node;
+		}
 		var table = '<table class="node-info"><tbody>';
 
 		table += "<tr><td>Type</td><td>&nbsp;"+node.type+"</td></tr>";

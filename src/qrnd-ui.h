@@ -87,6 +87,9 @@ inline void js_set(cJSON *json, const char *name, int value) {
 inline void js_set(cJSON *json, const char *name, unsigned int value) {
     cJSON_AddNumberToObject(json, name, value);
 }
+inline void js_set(cJSON *json, const char *name, unsigned long value) {
+    cJSON_AddNumberToObject(json, name, value);
+}
 inline void js_set(cJSON *json, const char *name, const char *value) {
     cJSON_AddStringToObject(json, name, value);
 }

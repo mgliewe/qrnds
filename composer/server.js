@@ -186,6 +186,7 @@ function startServer() {
                 cwd: __dirname + '/fs/',
                 env: {
                   ...process.env,
+                  QRND: __dirname + '/../src',
                   HOME: __dirname + '/fs/',
                   CXX_FLAGS: "-I../../src",
                   QRND_LIBS: "../../src/qrnd.a"

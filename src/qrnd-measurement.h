@@ -13,7 +13,7 @@ namespace QRND {
 class FrameCounter : public Filter, public Runnable {
 private:
     unsigned long timestamp;
-    unsigned counter;
+    unsigned long counter;
 protected:
     int buffersize;
     int num_buffer;
@@ -26,7 +26,8 @@ public:
         : FrameCounter(name.c_str(), buffersize, num_buffer) { }
     virtual ~FrameCounter();
 
-    int get_bandwidth();
+    unsigned long get_bandwidth();
+    void set_windowsize(int sz);
 
 protected:
     /** the thread runner for a NoMangler */
@@ -38,8 +39,8 @@ protected:
  */
 class FrameMeter : public Filter, public Runnable {
 private:
-    unsigned rms_counter;
-    unsigned avg_counter;
+    unsigned long rms_counter;
+    unsigned long avg_counter;
     int value_counter;
 protected:
     int buffersize;
@@ -52,8 +53,8 @@ public:
         : FrameMeter(name.c_str(), buffersize, num_buffer) { }
     virtual ~FrameMeter();
 
-    int get_rms();
-    int get_avg();
+    unsigned long get_rms();
+    unsigned long get_avg();
     void set_windowsize(int sz);
 
 protected:
